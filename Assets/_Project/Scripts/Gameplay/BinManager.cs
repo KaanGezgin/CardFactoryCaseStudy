@@ -19,6 +19,8 @@ namespace CardFactory.Gameplay
         List<CardColor> order;
         readonly Dictionary<CardColor, int> needed = new();   // renk başına gereken kutu
         readonly Dictionary<CardColor, int> shipped = new();  // sevk edilen kutu
+        readonly Dictionary<CardColor, int> total = new();    // renk başına toplam kart
+        readonly Dictionary<CardColor, int> captured = new(); // kutulara inen kart
 
         public Bin[] Slots { get; private set; }
 
@@ -48,6 +50,8 @@ namespace CardFactory.Gameplay
             {
                 needed[kv.Key] = Mathf.CeilToInt(kv.Value / (float)cap);
                 shipped[kv.Key] = 0;
+                total[kv.Key] = kv.Value;
+                captured[kv.Key] = 0;
             }
 
             Slots = new Bin[slotPositions.Length];
@@ -96,6 +100,19 @@ namespace CardFactory.Gameplay
             var c = PickColor(avoid);
             if (c.HasValue) Slots[slot].Configure(c.Value, cap);
             else Slots[slot].Deactivate();
+        }
+
+        /// <summary>Bir kart bir kutuya indiğinde Bin tarafından çağrılır.</summary>
+        public void NotifyCaptured(CardColor color)
+        {
+            if (captured.ContainsKey(color)) captured[color]++;
+        }
+
+        /// <summary>O rengin tüm kartları kutulara indi mi (stoklarda/yolda kalmadı)?</summary>
+        public bool IsColorExhausted(CardColor color)
+        {
+            return total.TryGetValue(color, out int t) &&
+                   captured.TryGetValue(color, out int c) && c >= t;
         }
 
         public Bin FindCaptor(CardColor color, float dist)

@@ -131,7 +131,11 @@ namespace CardFactory.Gameplay
                 Juice.PunchScale(transform, Vector3.one, 0.05f, 0.1f);
                 Sfx.Play("fill");
                 if (gm != null) gm.OnCardShipped();
-                if (Fill >= Capacity && inFlight <= 0)
+                if (mgr != null) mgr.NotifyCaptured(Color);
+
+                // Dolunca normal sevk; ya da renk tamamen tükendiyse yarım kutuyu da sevk et.
+                if (inFlight <= 0 && Active &&
+                    (Fill >= Capacity || (mgr != null && mgr.IsColorExhausted(Color))))
                     Ship();
             });
         }

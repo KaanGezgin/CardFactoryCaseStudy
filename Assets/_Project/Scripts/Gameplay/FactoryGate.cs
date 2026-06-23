@@ -17,18 +17,28 @@ namespace CardFactory.Gameplay
         Renderer body;
         Color baseColor;
         GameConfig cfg;
+        TextMesh label;
 
-        public void Init(Renderer gateRenderer, Color gateColor, GameConfig config)
+        public void Init(Renderer gateRenderer, Color gateColor, GameConfig config, TextMesh counterLabel)
         {
             body = gateRenderer;
             baseColor = gateColor;
             cfg = config;
+            label = counterLabel;
         }
 
         public void SetCount(int count, int max)
         {
             Count = count;
             Max = max;
+            if (label != null)
+            {
+                label.text = $"{count}/{max}";
+                // Limite yaklaşınca sarı, doluyken kırmızı tonla uyar.
+                label.color = count >= max ? new Color(1f, 0.35f, 0.35f)
+                            : count >= max - 2 ? new Color(1f, 0.85f, 0.35f)
+                            : Color.white;
+            }
         }
 
         public void FlashWarning()
@@ -42,6 +52,7 @@ namespace CardFactory.Gameplay
             WarningActive = true;
             float dur = cfg != null ? cfg.warningFlashDuration : 0.3f;
             var red = new Color(0.95f, 0.15f, 0.15f);
+            if (label != null) label.color = new Color(1f, 0.3f, 0.3f);
             float t = 0f;
             while (t < dur)
             {
@@ -60,6 +71,7 @@ namespace CardFactory.Gameplay
                 body.sharedMaterial.SetColor("_BaseColor", baseColor);
                 body.sharedMaterial.color = baseColor;
             }
+            if (label != null) SetCount(Count, Max);   // rengi sayaca göre geri al
             WarningActive = false;
         }
     }

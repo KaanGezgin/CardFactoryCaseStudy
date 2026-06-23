@@ -19,6 +19,16 @@ namespace CardFactory.Gameplay
 
         GameManager gm;
         Vector3[] slots;
+        float centerZ;
+
+        TextMesh offerLabel;
+        TextMesh offerAmount;
+        Transform offerRoot;
+        Renderer offerPanel;
+        SpriteRenderer glow;
+        bool failShown;
+
+        static readonly Color OfferGreen = new Color(0.10f, 0.42f, 0.18f);   // koyu yeşil
 
         const float Spacing = 0.42f;
         const float SlotY = 0.05f;
@@ -29,6 +39,7 @@ namespace CardFactory.Gameplay
             Capacity = capacity;
             Count = 0;
             gm = gameManager;
+            this.centerZ = centerZ;
             slots = new Vector3[capacity];
 
             float width = (capacity - 1) * Spacing;
@@ -75,6 +86,79 @@ namespace CardFactory.Gameplay
                 GameBootstrap.NewLitMaterial(new Color(0.14f, 0.22f, 0.40f));
 
             SlotsAnchor = new Vector3(pedX, 0.75f, centerZ);
+
+            BuildOfferWidget(new Vector3(pedX, 1.0f, centerZ - 0.25f));
+        }
+
+        // Kaideye GÖMÜLÜ yeşil teklif widget'ı (yazı + buton + coin), kameraya dönük.
+        void BuildOfferWidget(Vector3 pos)
+        {
+            var anchor = new GameObject("DockOffer");
+            anchor.transform.SetParent(transform, false);
+            anchor.transform.position = pos;
+            anchor.AddComponent<CardFactory.Feedback.Billboard>();
+            offerRoot = anchor.transform;
+
+            // Işıksız (unlit) radyal hale: teklifin ARKASINDA, kameradan uzakta.
+            // Opak panel ortayı derinlik testiyle gizler → buton/yazı temiz, çevresi hale.
+            var glowGo = new GameObject("DockGlow");
+            glowGo.transform.SetParent(anchor.transform, false);
+            glowGo.transform.localPosition = new Vector3(0f, 0f, 0.12f);
+            glowGo.transform.localScale = Vector3.one * 2.6f;
+            glow = glowGo.AddComponent<SpriteRenderer>();
+            glow.sprite = GameBootstrap.MakeRadialSprite();
+            glow.color = new Color(1f, 0.95f, 0.7f, 0f);
+            glow.enabled = false;
+
+            var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            panel.name = "OfferPanel";
+            var pcol = panel.GetComponent<Collider>();
+            if (pcol != null) Object.Destroy(pcol);
+            panel.transform.SetParent(anchor.transform, false);
+            panel.transform.localPosition = Vector3.zero;
+            panel.transform.localScale = new Vector3(1.7f, 1.05f, 0.08f);
+            offerPanel = panel.GetComponent<Renderer>();
+            offerPanel.sharedMaterial = GameBootstrap.NewLitMaterial(OfferGreen);
+
+            offerLabel = GameBootstrap.MakeWorldText("+4 slots", anchor.transform,
+                new Vector3(0f, 0.28f, -0.07f), 0.05f, Color.white, 80);
+
+            // Coin (basit sarı disk)
+            var coin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            coin.name = "Coin";
+            var ccol = coin.GetComponent<Collider>();
+            if (ccol != null) Object.Destroy(ccol);
+            coin.transform.SetParent(anchor.transform, false);
+            coin.transform.localPosition = new Vector3(-0.42f, -0.26f, -0.07f);
+            coin.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            coin.transform.localScale = new Vector3(0.28f, 0.02f, 0.28f);
+            coin.GetComponent<Renderer>().sharedMaterial =
+                GameBootstrap.NewLitMaterial(new Color(1f, 0.82f, 0.10f));
+
+            offerAmount = GameBootstrap.MakeWorldText("400", anchor.transform,
+                new Vector3(0.12f, -0.26f, -0.07f), 0.05f, new Color(1f, 0.95f, 0.6f), 80);
+        }
+
+        /// <summary>
+        /// Level fail olunca: teklif "New Dock / 1000" olur ve dock'a özel bir spot
+        /// ışığı yanar (alana dikkat çeker).
+        /// </summary>
+        public void ShowFailOffer()
+        {
+            if (failShown) return;
+            failShown = true;
+
+            if (offerLabel != null) offerLabel.text = "New Dock";
+            if (offerAmount != null) offerAmount.text = "1000";
+            if (offerPanel != null)
+                offerPanel.sharedMaterial = GameBootstrap.NewLitMaterial(OfferGreen);
+            if (offerRoot != null) Juice.PunchScale(offerRoot, Vector3.one, 0.25f, 0.3f);
+
+            if (glow != null)
+            {
+                glow.enabled = true;
+                glow.color = new Color(1f, 0.95f, 0.7f, 0.95f);
+            }
         }
 
         public void Receive(Card card)

@@ -67,7 +67,7 @@ namespace CardFactory.Core
             gm.transform.SetParent(root.transform, false);
             gm.Init(config, levelIndex, level);
 
-            var gate = BuildGate(root.transform, config, pathPts[0], out Vector3 beltAnchor);
+            var gate = BuildGate(root.transform, config, pathPts[0]);
             BuildEndCap(root.transform, pathPts[pathPts.Count - 1]);
 
             // Dock
@@ -100,10 +100,10 @@ namespace CardFactory.Core
             input.transform.SetParent(root.transform, false);
             input.Init(Camera.main, gm);
 
-            // HUD — dünya konumlu UI bağlama (objelere gömülü görünüm)
+            // HUD — kazan/kaybet paneli + butonlar (sayaç ve dock teklifi artık 3B/gömülü)
             var hud = new GameObject("HudController").AddComponent<HudController>();
             hud.transform.SetParent(root.transform, false);
-            hud.Init(gm, conveyor, gate, Camera.main, beltAnchor, dock.SlotsAnchor, root.transform);
+            hud.Init(gm, dock, root.transform);
 
             Debug.Log($"[GameBootstrap] Level {levelIndex + 1} kuruldu " +
                       $"(yığın {level.stacks.Count}, kart {level.TotalCards}).");
@@ -153,8 +153,7 @@ namespace CardFactory.Core
             }
         }
 
-        static FactoryGate BuildGate(Transform parent, GameConfig config, Vector3 startPt,
-                                     out Vector3 screenAnchor)
+        static FactoryGate BuildGate(Transform parent, GameConfig config, Vector3 startPt)
         {
             // Makine gövdesi
             var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -181,10 +180,61 @@ namespace CardFactory.Core
                 NewLitMaterial(new Color(0.05f, 0.06f, 0.10f));
 
             var gate = body.AddComponent<FactoryGate>();
-            gate.Init(body.GetComponent<Renderer>(), gateColor, config);
 
-            screenAnchor = screen.transform.position + new Vector3(0f, 0.18f, -0.1f);
+            // Ekrana GÖMÜLÜ 3B sayaç: ekranla aynı konumda/derinlikte, kameraya dönük.
+            var counterAnchor = new GameObject("GateCounter");
+            counterAnchor.transform.SetParent(parent, false);
+            counterAnchor.transform.position = screen.transform.position + new Vector3(0f, 0.16f, -0.16f);
+            counterAnchor.AddComponent<CardFactory.Feedback.Billboard>();
+            var counter = MakeWorldText("0/20", counterAnchor.transform, Vector3.zero,
+                0.07f, Color.white, 90);
+
+            gate.Init(body.GetComponent<Renderer>(), gateColor, config, counter);
             return gate;
+        }
+
+        /// <summary>Dünya-uzayı 3B yazı (TextMesh) üretir. Objelere gömülü etiketler için.</summary>
+        public static TextMesh MakeWorldText(string text, Transform parent, Vector3 localPos,
+                                             float characterSize, Color color, int fontSize)
+        {
+            var go = new GameObject("WorldText");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.identity;
+
+            var tm = go.AddComponent<TextMesh>();
+            tm.text = text;
+            tm.fontSize = fontSize;
+            tm.characterSize = characterSize;
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.color = color;
+            tm.fontStyle = FontStyle.Bold;
+
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            tm.font = font;
+            go.GetComponent<MeshRenderer>().sharedMaterial = font.material;
+            return tm;
+        }
+
+        /// <summary>Yumuşak radyal hale (merkez parlak → kenar şeffaf) sprite'ı üretir.</summary>
+        public static Sprite MakeRadialSprite(int size = 128)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            float c = (size - 1) * 0.5f;
+            float maxR = c;
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / maxR;
+                    float a = Mathf.Clamp01(1f - d);   // doğrusal düşüş (dolgun hale)
+                    px[y * size + x] = new Color(1f, 1f, 1f, a);
+                }
+            tex.SetPixels32(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
         static void BuildEndCap(Transform parent, Vector3 endPt)
