@@ -20,7 +20,7 @@ namespace CardFactory.Data
         public int binCapacity = 10;           // kutu dolum kapasitesi
 
         [Header("Dock")]
-        public int dockCapacity = 24;          // sabit; genişletme yok
+        public int dockCapacity = 20;          // sabit; genişletme yok
 
         [Header("Juice süreleri (sn)")]
         public float cardSendDuration = 0.25f;
@@ -29,7 +29,7 @@ namespace CardFactory.Data
         public float warningFlashDuration = 0.30f;
 
         [Header("Kamera / sahne")]
-        public Color backgroundColor = new Color(0.12f, 0.13f, 0.18f);
+        public Color backgroundColor = new Color(0.55f, 0.74f, 0.92f); // açık mavi (gerçek oyuna yakın)
 
         public static GameConfig Default => new GameConfig();
     }

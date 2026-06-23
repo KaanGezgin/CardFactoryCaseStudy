@@ -17,9 +17,16 @@ namespace CardFactory.Data
         public List<List<CardColor>> stacks = new();
 
         /// <summary>
-        /// Sevk kutularının hedef renk kuyruğu (sırayla aktif olur/yenilenir).
+        /// Sevk kutularının hedef renk kuyruğu (eski model; artık binColorOrder
+        /// kullanılıyor ama geriye dönük bırakıldı).
         /// </summary>
         public List<CardColor> binQueue = new();
+
+        /// <summary>
+        /// Renklerin "açılma" sırası = yığınların üstten-alta erişim sırası.
+        /// BinManager kutuları bu sırayla dağıtır; aktif 2 kutu hep farklı renk olur.
+        /// </summary>
+        public List<CardColor> binColorOrder = new();
 
         // Level başına override edilebilen sayılar (0/negatif = GameConfig kullan).
         public int activeBinCount = 2;

@@ -1,4 +1,7 @@
+using System.Collections.Generic;
 using CardFactory.Data;
+using CardFactory.Feedback;
+using CardFactory.Gameplay;
 using UnityEngine;
 
 namespace CardFactory.Core
@@ -11,8 +14,8 @@ namespace CardFactory.Core
     }
 
     /// <summary>
-    /// Oyun durumunu tutar ve alt sistemleri bağlar. Faz A'da iskelet:
-    /// sadece config/level'i yükler ve durumu Playing yapar. Core loop Faz B'de.
+    /// Oyun durumunu tutar. Kazanma: eldeki tüm yığınlar boşalıp yolda kart
+    /// kalmayınca. Kaybetme: dock dolunca.
     /// </summary>
     public class GameManager : MonoBehaviour
     {
@@ -23,22 +26,73 @@ namespace CardFactory.Core
         public GameState State { get; private set; } = GameState.Playing;
 
         public int CurrentLevelIndex { get; private set; }
+        public int Shipped { get; private set; }
 
-        public void Init(GameConfig config, int levelIndex)
+        List<CardStack> stacks;
+        Conveyor conveyor;
+
+        public void Init(GameConfig config, int levelIndex, LevelData level)
         {
             Instance = this;
             Config = config ?? GameConfig.Default;
             CurrentLevelIndex = levelIndex;
-            Level = DefaultLevels.Get(levelIndex);
+            Level = level;
+            Shipped = 0;
             State = GameState.Playing;
 
             Debug.Log($"[GameManager] Level {levelIndex + 1} yüklendi. " +
-                      $"Yığın: {Level.stacks.Count}, Toplam kart: {Level.TotalCards}, " +
-                      $"Kutu kuyruğu: {Level.binQueue.Count}");
+                      $"Yığın: {Level.stacks.Count}, Toplam kart: {Level.TotalCards}");
         }
 
-        // Faz B'de doldurulacak kancalar:
-        public void OnDockFull() { /* TODO Faz B: LEVEL FAILED */ }
-        public void OnCardShipped() { /* TODO Faz B: kazanma kontrolü */ }
+        public void SetSystems(List<CardStack> stackList, Conveyor conveyorRef)
+        {
+            stacks = stackList;
+            conveyor = conveyorRef;
+        }
+
+        void Update()
+        {
+            if (State != GameState.Playing || stacks == null || conveyor == null)
+                return;
+
+            if (conveyor.BeltCount != 0) return;
+            foreach (var s in stacks)
+                if (s != null && !s.IsEmpty) return;
+
+            Win();
+        }
+
+        void Win()
+        {
+            State = GameState.Won;
+            Sfx.Play("complete");
+            Juice.CameraPunch(0.3f);
+            Debug.Log("[GameManager] LEVEL COMPLETE — tüm kartlar bitti.");
+        }
+
+        public void OnCardShipped()
+        {
+            if (State != GameState.Playing) return;
+            Shipped++;
+        }
+
+        public void OnDockFull()
+        {
+            if (State != GameState.Playing) return;
+            State = GameState.Lost;
+            Sfx.Play("fail");
+            Sfx.Haptic();
+            Debug.Log("[GameManager] LEVEL FAILED — dock doldu.");
+        }
+
+        public void Restart()
+        {
+            GameBootstrap.RequestRebuild(CurrentLevelIndex);
+        }
+
+        public void NextLevel()
+        {
+            GameBootstrap.RequestRebuild((CurrentLevelIndex + 1) % DefaultLevels.Count);
+        }
     }
 }
