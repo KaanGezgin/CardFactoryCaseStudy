@@ -6,9 +6,9 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Sevkiyat kutusu: sabit hedef renk + kapasite. Geriye yatık duran, görünür
-    /// slotlu kasa. Boş slotlar hedef rengin koyu tonunda; kart geldikçe slot tam
-    /// renge boyanır. Dolunca BinManager'a haber verir.
+    /// Sevkiyat konteyneri: sabit hedef renk + kapasite. Geriye yatık duran, görünür
+    /// slotlu konteyner gövdesi. Boş slotlar hedef rengin koyu tonunda; kart geldikçe
+    /// slot tam renge boyanır. Dolunca BinManager'a haber verir.
     /// </summary>
     public class Bin : MonoBehaviour
     {
@@ -30,13 +30,13 @@ namespace CardFactory.Gameplay
         Material emptyMat;
         Material fillMat;
 
-        Transform marker;          // üstte zıplayan hedef-renk baloncuğu
+        Transform marker;          // üstte hedef-renk durum lambası
         Renderer markerRend;
-        Vector3 markerBase;
+        Renderer bodyRend;
 
-        const float BodyHeight = 1.3f;
-        const float SlotFrontZ = -0.30f;
-        const float LeanBack = 34f;     // geriye yatma açısı (derece) — ağzı yukarı dönük
+        const float BodyHeight = 1.35f;
+        const float SlotFrontZ = -0.28f;
+        const float LeanBack = 28f;     // konteyner hafif geriye yatar
 
         public void Init(GameManager gameManager, BinManager manager, int slot, Vector3 pos)
         {
@@ -46,23 +46,65 @@ namespace CardFactory.Gameplay
             transform.position = pos;
             transform.rotation = Quaternion.Euler(LeanBack, 0f, 0f);
 
-            // Kasa gövdesi — koyu çerçeve.
-            var bodyGo = ProcMesh.RoundedCube("BinBody");
+            var frameColor = new Color(0.14f, 0.16f, 0.19f);
+            var trimColor = new Color(0.22f, 0.24f, 0.28f);
+
+            // Ana konteyner gövdesi — dikey dikdörtgen kasa.
+            var bodyGo = ProcMesh.RoundedCube("ContainerBody");
             DestroyCollider(bodyGo);
             bodyGo.transform.SetParent(transform, false);
-            bodyGo.transform.localPosition = new Vector3(0f, BodyHeight * 0.5f, 0.06f);
-            bodyGo.transform.localScale = new Vector3(1.05f, BodyHeight + 0.08f, 0.55f);
-            bodyGo.GetComponent<Renderer>().sharedMaterial =
-                GameBootstrap.NewLitMaterial(new Color(0.12f, 0.13f, 0.15f));
+            bodyGo.transform.localPosition = new Vector3(0f, BodyHeight * 0.5f, 0.02f);
+            bodyGo.transform.localScale = new Vector3(0.92f, BodyHeight, 0.48f);
+            bodyRend = bodyGo.GetComponent<Renderer>();
+            bodyRend.sharedMaterial = GameBootstrap.NewLitMaterial(frameColor);
 
-            // Hedef-renk işaretçisi (kutunun üstünde zıplayan baloncuk).
-            var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            markerGo.name = "BinMarker";
+            // Üst çerçeve / kapak şeridi.
+            var topRail = ProcMesh.RoundedCube("ContainerTop");
+            DestroyCollider(topRail);
+            topRail.transform.SetParent(transform, false);
+            topRail.transform.localPosition = new Vector3(0f, BodyHeight + 0.06f, 0.02f);
+            topRail.transform.localScale = new Vector3(0.98f, 0.12f, 0.54f);
+            topRail.GetComponent<Renderer>().sharedMaterial = GameBootstrap.NewLitMaterial(trimColor);
+
+            // Alt taban şeridi.
+            var baseRail = ProcMesh.RoundedCube("ContainerBase");
+            DestroyCollider(baseRail);
+            baseRail.transform.SetParent(transform, false);
+            baseRail.transform.localPosition = new Vector3(0f, 0.06f, 0.02f);
+            baseRail.transform.localScale = new Vector3(0.98f, 0.12f, 0.54f);
+            baseRail.GetComponent<Renderer>().sharedMaterial = GameBootstrap.NewLitMaterial(trimColor);
+
+            // Ön yüzde oluklu (corrugated) dikey şeritler — konteyner hissi.
+            var ribMat = GameBootstrap.NewLitMaterial(new Color(0.10f, 0.11f, 0.13f));
+            for (int i = -2; i <= 2; i++)
+            {
+                var rib = ProcMesh.RoundedCube("ContainerRib_" + i);
+                DestroyCollider(rib);
+                rib.transform.SetParent(transform, false);
+                rib.transform.localPosition = new Vector3(i * 0.17f, BodyHeight * 0.5f, -0.24f);
+                rib.transform.localScale = new Vector3(0.06f, BodyHeight * 0.92f, 0.06f);
+                rib.GetComponent<Renderer>().sharedMaterial = ribMat;
+            }
+
+            // Köşe direkleri.
+            var postMat = GameBootstrap.NewLitMaterial(new Color(0.08f, 0.09f, 0.11f));
+            foreach (var sx in new[] { -1f, 1f })
+            foreach (var sz in new[] { -1f, 1f })
+            {
+                var post = ProcMesh.RoundedCube("ContainerPost");
+                DestroyCollider(post);
+                post.transform.SetParent(transform, false);
+                post.transform.localPosition = new Vector3(sx * 0.44f, BodyHeight * 0.5f, sz * 0.22f);
+                post.transform.localScale = new Vector3(0.08f, BodyHeight * 0.98f, 0.08f);
+                post.GetComponent<Renderer>().sharedMaterial = postMat;
+            }
+
+            // Hedef-renk durum lambası — konteynerin üst önünde parlak panel.
+            var markerGo = ProcMesh.RoundedCube("ContainerLight");
             DestroyCollider(markerGo);
             markerGo.transform.SetParent(transform, false);
-            markerBase = new Vector3(0f, BodyHeight + 0.5f, 0f);
-            markerGo.transform.localPosition = markerBase;
-            markerGo.transform.localScale = Vector3.one * 0.34f;
+            markerGo.transform.localPosition = new Vector3(0f, BodyHeight + 0.02f, -0.22f);
+            markerGo.transform.localScale = new Vector3(0.36f, 0.14f, 0.08f);
             markerRend = markerGo.GetComponent<Renderer>();
             marker = markerGo.transform;
         }
@@ -84,8 +126,19 @@ namespace CardFactory.Gameplay
 
             var full = CardPalette.Get(color);
             fillMat = GameBootstrap.NewLitMaterial(full);
-            emptyMat = GameBootstrap.NewLitMaterial(full * 0.45f);  // koyu ton
-            if (markerRend != null) markerRend.sharedMaterial = GameBootstrap.NewLitMaterial(full);
+            emptyMat = GameBootstrap.NewLitMaterial(full * 0.45f);
+            if (bodyRend != null)
+            {
+                var shell = GameBootstrap.NewLitMaterial(UnityEngine.Color.Lerp(full * 0.35f, new UnityEngine.Color(0.12f, 0.13f, 0.15f), 0.55f));
+                bodyRend.sharedMaterial = shell;
+            }
+            if (markerRend != null)
+            {
+                var lightMat = GameBootstrap.NewLitMaterial(full);
+                lightMat.EnableKeyword("_EMISSION");
+                lightMat.SetColor("_EmissionColor", full * 2.0f);
+                markerRend.sharedMaterial = lightMat;
+            }
 
             BuildSlots(capacity);
 
@@ -102,8 +155,12 @@ namespace CardFactory.Gameplay
 
         void Update()
         {
+            // Durum lambası hafif nabız atar.
             if (marker != null && Active)
-                marker.localPosition = markerBase + Vector3.up * (Mathf.Sin(Time.time * 4f) * 0.1f + 0.1f);
+            {
+                float p = 0.88f + Mathf.Sin(Time.time * 4.5f) * 0.12f;
+                marker.localScale = new Vector3(0.36f * p, 0.14f, 0.08f);
+            }
         }
 
         void BuildSlots(int capacity)

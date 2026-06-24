@@ -465,6 +465,53 @@ namespace CardFactory.Core
             return tm;
         }
 
+        /// <summary>Geniş, yumuşak parlama halesi — DockGlow / bloom için (dar MakeRadialSprite'tan daha geniş yayılır).</summary>
+        public static Sprite MakeGlowSprite(int size = 256)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            float c = (size - 1) * 0.5f;
+            float maxR = c;
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / maxR;
+                    float core = Mathf.Clamp01(1f - d * 0.55f);
+                    float halo = Mathf.Pow(Mathf.Clamp01(1f - d), 1.35f);
+                    float a = Mathf.Clamp01(core * 0.55f + halo * 0.95f);
+                    px[y * size + x] = new Color(1f, 1f, 1f, a);
+                }
+            tex.SetPixels32(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        /// <summary>Işıktan bağımsız parlama materyali (URP Unlit + emission → bloom yakalar).</summary>
+        public static Material NewGlowMaterial(Color color)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Unlit/Color");
+            var mat = new Material(shader);
+            mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_EmissionColor"))
+            {
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", color * 3.2f);
+            }
+            if (color.a < 0.99f)
+            {
+                mat.SetFloat("_Surface", 1f);
+                mat.SetFloat("_Blend", 0f);
+                mat.SetOverrideTag("RenderType", "Transparent");
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mat.SetInt("_ZWrite", 0);
+                mat.renderQueue = 3000;
+                mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            }
+            return mat;
+        }
+
         /// <summary>Yumuşak radyal hale (merkez parlak → kenar şeffaf) sprite'ı üretir.</summary>
         public static Sprite MakeRadialSprite(int size = 128)
         {
@@ -592,13 +639,16 @@ namespace CardFactory.Core
             if (light != null)
             {
                 light.color = new Color(1f, 0.97f, 0.9f);
-                light.intensity = 1.25f;
+                light.intensity = 1.3f;
                 light.shadows = LightShadows.Soft;
-                light.shadowStrength = 0.45f;
+                light.shadowStrength = 0.6f;
                 light.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
             }
             RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.62f, 0.66f, 0.72f);
+            RenderSettings.ambientLight = new Color(0.64f, 0.68f, 0.74f);
+
+            // Çevre süsleri (köşe sandıklar + uyarı bandı) — yoksa kurulur (reuse'da da).
+            EnsureDecor(world);
 
             // Grid zemin
             var ground = world.transform.Find("Ground");
@@ -608,11 +658,12 @@ namespace CardFactory.Core
                 if (r != null) r.sharedMaterial = GroundMaterial();
             }
 
-            // Hafif parlaklık — dünyadaki tüm materyaller
+            // Parlaklık — sadece düz renkli oyun materyalleri (dokulu zemin/sandık/bant matt kalsın)
             foreach (var rend in world.GetComponentsInChildren<Renderer>(true))
             {
                 var m = rend.sharedMaterial;
-                if (m != null && m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.45f);
+                if (m == null || m.mainTexture != null) continue;
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.45f);
             }
 
             // Post-processing volume (her açılışta taze kur → serialize sorunlarından bağımsız)
@@ -665,23 +716,23 @@ namespace CardFactory.Core
 
         static Material GroundMaterial()
         {
-            var mat = NewLitMaterial(new Color(0.85f, 0.90f, 0.96f));
+            var mat = NewLitMaterial(new Color(0.84f, 0.90f, 0.97f));
             var tex = MakeGridTexture();
             mat.SetTexture("_BaseMap", tex);
             mat.mainTexture = tex;
-            mat.SetTextureScale("_BaseMap", new Vector2(12f, 12f));
-            mat.mainTextureScale = new Vector2(12f, 12f);
-            mat.SetFloat("_Smoothness", 0.2f);
+            mat.SetTextureScale("_BaseMap", new Vector2(7f, 7f));   // daha büyük, ferah hücreler
+            mat.mainTextureScale = new Vector2(7f, 7f);
+            mat.SetFloat("_Smoothness", 0.15f);
             return mat;
         }
 
         static Texture2D MakeGridTexture()
         {
             const int s = 64;
-            const int lineW = 3;
+            const int lineW = 2;
             var tex = new Texture2D(s, s, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
-            var baseC = (Color32)new Color(0.86f, 0.91f, 0.97f);
-            var lineC = (Color32)new Color(0.74f, 0.81f, 0.91f);
+            var baseC = (Color32)new Color(0.84f, 0.90f, 0.97f);
+            var lineC = (Color32)new Color(0.77f, 0.85f, 0.94f);   // daha yumuşak çizgi
             var px = new Color32[s * s];
             for (int y = 0; y < s; y++)
                 for (int x = 0; x < s; x++)
@@ -689,6 +740,133 @@ namespace CardFactory.Core
             tex.SetPixels32(px);
             tex.Apply();
             return tex;
+        }
+
+        static Texture2D stripeTex;
+        /// <summary>Sarı-siyah diyagonal uyarı bandı dokusu (prosedürel).</summary>
+        static Texture2D MakeStripeTexture()
+        {
+            if (stripeTex != null) return stripeTex;
+            const int s = 64;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
+            var yellow = (Color32)new Color(0.97f, 0.78f, 0.06f);
+            var black = (Color32)new Color(0.11f, 0.11f, 0.12f);
+            var px = new Color32[s * s];
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                    px[y * s + x] = (((x + y) / 16) % 2 == 0) ? yellow : black;
+            tex.SetPixels32(px);
+            tex.Apply();
+            stripeTex = tex;
+            return tex;
+        }
+
+        static Texture2D crateTex;
+        /// <summary>Ahşap sandık dokusu: tahta dikişleri + çerçeve + çapraz destek (prosedürel).</summary>
+        static Texture2D MakeCrateTexture()
+        {
+            if (crateTex != null) return crateTex;
+            const int s = 64;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
+            var wood = (Color32)new Color(0.64f, 0.45f, 0.25f);
+            var woodDark = (Color32)new Color(0.49f, 0.33f, 0.17f);
+            var frame = (Color32)new Color(0.40f, 0.27f, 0.13f);
+            var px = new Color32[s * s];
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                {
+                    Color32 c = wood;
+                    if (x % 16 < 2) c = woodDark;                                   // tahta dikişleri
+                    if (Mathf.Abs(x - y) < 3 || Mathf.Abs(x - (s - 1 - y)) < 3) c = woodDark; // çapraz destek
+                    const int b = 5;
+                    if (x < b || x >= s - b || y < b || y >= s - b) c = frame;      // dış çerçeve
+                    px[y * s + x] = c;
+                }
+            tex.SetPixels32(px);
+            tex.Apply();
+            crateTex = tex;
+            return tex;
+        }
+
+        /// <summary>
+        /// Çevre süsleri (idempotent): 4 köşe ahşap sandık + üstte sarı-siyah uyarı
+        /// bandı. "Decor" kökü zaten varsa hiçbir şey yapmaz → reuse'da da bir kez kurulur.
+        /// </summary>
+        static void EnsureDecor(GameObject world)
+        {
+            if (world.transform.Find("Decor") != null) return;
+
+            var decor = new GameObject("Decor");
+            decor.transform.SetParent(world.transform, false);
+
+            // Köşe ahşap sandıklar
+            var crateMat = NewLitMaterial(new Color(0.64f, 0.45f, 0.25f));
+            var ct = MakeCrateTexture();
+            crateMat.SetTexture("_BaseMap", ct);
+            crateMat.mainTexture = ct;
+            crateMat.SetFloat("_Smoothness", 0.12f);
+
+            var cratePos = new[]
+            {
+                new Vector3(-6.6f, 0.65f,  7.0f),
+                new Vector3( 6.6f, 0.65f,  7.0f),
+                new Vector3(-7.6f, 0.65f, -7.4f),
+                new Vector3( 7.6f, 0.65f, -7.4f),
+            };
+            var crateYaw = new[] { 10f, -8f, -6f, 12f };
+            for (int i = 0; i < cratePos.Length; i++)
+            {
+                var crate = ProcMesh.RoundedCube("Crate");
+                crate.transform.SetParent(decor.transform, false);
+                crate.transform.position = cratePos[i];
+                crate.transform.localScale = Vector3.one * 1.3f;
+                crate.transform.localRotation = Quaternion.Euler(0f, crateYaw[i], 0f);
+                crate.GetComponent<Renderer>().sharedMaterial = crateMat;
+            }
+
+            BuildWarningTape(decor.transform);
+        }
+
+        static void BuildWarningTape(Transform parent)
+        {
+            const float z = 8.0f;
+            const float y = 0.95f;
+
+            var stripeMat = NewLitMaterial(Color.white);
+            var st = MakeStripeTexture();
+            stripeMat.SetTexture("_BaseMap", st);
+            stripeMat.mainTexture = st;
+            stripeMat.SetTextureScale("_BaseMap", new Vector2(10f, 1f));
+            stripeMat.mainTextureScale = new Vector2(10f, 1f);
+            stripeMat.SetFloat("_Smoothness", 0.08f);
+
+            var bar = ProcMesh.RoundedCube("WarningTape");
+            bar.transform.SetParent(parent, false);
+            bar.transform.position = new Vector3(0f, y, z);
+            bar.transform.localScale = new Vector3(15f, 0.45f, 0.28f);
+            bar.GetComponent<Renderer>().sharedMaterial = stripeMat;
+
+            var poleMat = NewLitMaterial(new Color(0.55f, 0.57f, 0.60f));
+            for (int s = -1; s <= 1; s += 2)
+            {
+                var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                pole.name = "TapePole";
+                var pc = pole.GetComponent<Collider>();
+                if (pc != null) Object.Destroy(pc);
+                pole.transform.SetParent(parent, false);
+                pole.transform.position = new Vector3(s * 7.2f, y * 0.5f, z);
+                pole.transform.localScale = new Vector3(0.18f, y * 0.5f + 0.1f, 0.18f);
+                pole.GetComponent<Renderer>().sharedMaterial = poleMat;
+            }
+
+            var knob = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            knob.name = "TapeKnob";
+            var kc = knob.GetComponent<Collider>();
+            if (kc != null) Object.Destroy(kc);
+            knob.transform.SetParent(parent, false);
+            knob.transform.position = new Vector3(-2.5f, y + 0.26f, z);
+            knob.transform.localScale = Vector3.one * 0.3f;
+            knob.GetComponent<Renderer>().sharedMaterial = poleMat;
         }
 
         public static Material NewLitMaterial(Color color)

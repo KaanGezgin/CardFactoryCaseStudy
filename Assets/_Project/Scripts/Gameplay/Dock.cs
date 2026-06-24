@@ -15,7 +15,6 @@ namespace CardFactory.Gameplay
         public int Capacity { get; private set; }
         public int Count { get; private set; }
 
-        /// <summary>"+4 slots" UI'ının üstüne oturacağı 3B kaidenin dünya konumu.</summary>
         public Vector3 SlotsAnchor { get; private set; }
 
         GameManager gm;
@@ -26,18 +25,35 @@ namespace CardFactory.Gameplay
         TextMesh offerAmount;
         Transform offerRoot;
         Renderer offerPanel;
-        SpriteRenderer glow;
+
+        Transform glowRoot;
+        SpriteRenderer glowSr;
+        float glowBaseAlpha = 0.88f;
+        bool glowActive;
         bool failShown;
 
-        Renderer trayRend;          // tansiyon nabzı için
-        bool tensionEnabled;        // reklam için saklandı; GameConfig.dockTensionPulse
-        static readonly Color TrayBase = new Color(0.88f, 0.90f, 0.93f);
+        Renderer trayRend;
+        Renderer trayInnerRend;
+        Renderer[] slotPockets;
+        bool tensionEnabled;
 
-        static readonly Color OfferGreen = new Color(0.05f, 0.24f, 0.10f);   // koyu yeşil (kısıldı)
+        static readonly Color TrayOuter = new Color(0.96f, 0.97f, 0.99f);
+        static readonly Color TrayInner = new Color(0.84f, 0.87f, 0.92f);
+        static readonly Color SlotPocket = new Color(0.76f, 0.80f, 0.86f);
+        static readonly Color OfferGreen = new Color(0.12f, 0.68f, 0.30f);
+        static readonly Color PedestalBlue = new Color(0.11f, 0.17f, 0.32f);
 
-        const float Spacing = 0.42f;
-        const float SlotY = 0.05f;
-        const float CardY = 0.32f;
+        const float Spacing = 0.28f;   // daha sıkışık; slot konumları Inspector'dan ayarlanabilir
+        const float SlotPocketY = 0.17f;
+        const float CardY = 0.30f;
+
+        // Bant kartı (0.6, 0.18, 0.7) → dock'ta dikey durur: Y=uzun kenar, X=ince yüz.
+        static readonly Vector3 DockCardScale = new Vector3(0.18f, 0.7f, 0.6f);
+        static readonly Quaternion DockCardRot = Quaternion.Euler(-12f, 0f, 0f);
+        static readonly Vector3 PocketScale = new Vector3(0.24f, 0.38f, 0.40f);
+
+        static readonly UnityEngine.Color GlowTint = new UnityEngine.Color(1f, 0.90f, 0.32f);
+        const float GlowAlphaOnFail = 0.92f;
 
         public void Init(int capacity, float centerZ)
         {
@@ -45,120 +61,232 @@ namespace CardFactory.Gameplay
             Count = 0;
             this.centerZ = centerZ;
             slots = new Vector3[capacity];
+            slotPockets = new Renderer[capacity];
 
             float width = (capacity - 1) * Spacing;
             float xStart = -width * 0.5f;
+            float trayW = width + 1.05f;
 
-            // Tepsi tabanı (açık renk bar)
             var tray = ProcMesh.RoundedCube("DockTray");
-            var tcol = tray.GetComponent<Collider>();
-            if (tcol != null) Object.Destroy(tcol);
+            DestroyCol(tray);
             tray.transform.SetParent(transform, false);
-            tray.transform.position = new Vector3(0f, -0.02f, centerZ);
-            tray.transform.localScale = new Vector3(width + 0.7f, 0.14f, 0.75f);
+            tray.transform.position = new Vector3(0f, 0.02f, centerZ);
+            tray.transform.localScale = new Vector3(trayW, 0.22f, 0.90f);
             trayRend = tray.GetComponent<Renderer>();
-            trayRend.sharedMaterial = GameBootstrap.NewLitMaterial(TrayBase);
+            var trayMat = GameBootstrap.NewLitMaterial(TrayOuter);
+            trayMat.SetFloat("_Smoothness", 0.42f);
+            trayRend.sharedMaterial = trayMat;
 
-            // Boş slot işaretçileri
-            var slotMat = GameBootstrap.NewLitMaterial(new Color(0.30f, 0.33f, 0.38f));
+            var inner = ProcMesh.RoundedCube("DockTrayInner");
+            DestroyCol(inner);
+            inner.transform.SetParent(transform, false);
+            inner.transform.position = new Vector3(0f, 0.06f, centerZ);
+            inner.transform.localScale = new Vector3(trayW - 0.28f, 0.07f, 0.74f);
+            trayInnerRend = inner.GetComponent<Renderer>();
+            trayInnerRend.sharedMaterial = GameBootstrap.NewLitMaterial(TrayInner);
+
+            var pocketMat = GameBootstrap.NewLitMaterial(SlotPocket);
+            pocketMat.SetFloat("_Smoothness", 0.28f);
             for (int i = 0; i < capacity; i++)
             {
                 float x = xStart + i * Spacing;
-                slots[i] = new Vector3(x, CardY, centerZ);
+                slots[i] = new Vector3(x, CardY, centerZ - 0.02f);
 
-                var marker = ProcMesh.RoundedCube("DockSlot_" + i);
-                var mcol = marker.GetComponent<Collider>();
-                if (mcol != null) Object.Destroy(mcol);
-                marker.transform.SetParent(transform, false);
-                marker.transform.position = new Vector3(x, SlotY, centerZ);
-                marker.transform.localScale = new Vector3(0.32f, 0.06f, 0.5f);
-                marker.GetComponent<Renderer>().sharedMaterial = slotMat;
+                var pocket = ProcMesh.RoundedCube("DockSlot_" + i);
+                DestroyCol(pocket);
+                pocket.transform.SetParent(transform, false);
+                pocket.transform.position = new Vector3(x, SlotPocketY, centerZ);
+                pocket.transform.localScale = PocketScale;
+                slotPockets[i] = pocket.GetComponent<Renderer>();
+                slotPockets[i].sharedMaterial = pocketMat;
             }
 
-            // "+4 slots" kaidesi (dock'un sağ ucunda, yükseltilmiş koyu mavi blok).
-            float pedX = width * 0.5f + 1.15f;
+            float pedX = width * 0.5f + 1.05f;
             var pedestal = ProcMesh.RoundedCube("SlotsPedestal");
-            var pcol = pedestal.GetComponent<Collider>();
-            if (pcol != null) Object.Destroy(pcol);
+            DestroyCol(pedestal);
             pedestal.transform.SetParent(transform, false);
-            pedestal.transform.position = new Vector3(pedX, 0.3f, centerZ);
-            pedestal.transform.localScale = new Vector3(1.7f, 0.7f, 1.15f);
-            pedestal.GetComponent<Renderer>().sharedMaterial =
-                GameBootstrap.NewLitMaterial(new Color(0.14f, 0.22f, 0.40f));
+            pedestal.transform.position = new Vector3(pedX, 0.20f, centerZ);
+            pedestal.transform.localScale = new Vector3(1.55f, 0.82f, 0.90f);
+            pedestal.GetComponent<Renderer>().sharedMaterial = GameBootstrap.NewLitMaterial(PedestalBlue);
 
-            SlotsAnchor = new Vector3(pedX, 0.75f, centerZ);
+            SlotsAnchor = new Vector3(pedX, 0.72f, centerZ);
 
-            BuildOfferWidget(new Vector3(pedX, 1.0f, centerZ - 0.25f));
+            BuildOfferWidget(new Vector3(pedX, 0.95f, centerZ - 0.22f));
         }
 
-        // Kaideye GÖMÜLÜ yeşil teklif widget'ı (yazı + buton + coin), kameraya dönük.
+        static void DestroyCol(GameObject go)
+        {
+            var c = go.GetComponent<Collider>();
+            if (c != null) Object.Destroy(c);
+        }
+
         void BuildOfferWidget(Vector3 pos)
         {
             var anchor = new GameObject("DockOffer");
             anchor.transform.SetParent(transform, false);
             anchor.transform.position = pos;
-            // Billboard YOK: rotasyon bake'te kamera açısıyla sabit (Play'de kaymaz, Inspector'dan ayarlanabilir).
             anchor.transform.rotation = Quaternion.Euler(GameBootstrap.CameraPitch, 0f, 0f);
             offerRoot = anchor.transform;
 
-            // Işıksız (unlit) radyal hale: teklifin ARKASINDA, kameradan uzakta.
-            // Opak panel ortayı derinlik testiyle gizler → buton/yazı temiz, çevresi hale.
-            var glowGo = new GameObject("DockGlow");
-            glowGo.transform.SetParent(anchor.transform, false);
-            glowGo.transform.localPosition = new Vector3(0f, 0f, 0.12f);
-            glowGo.transform.localScale = Vector3.one * 2.0f;
-            glow = glowGo.AddComponent<SpriteRenderer>();
-            glow.sprite = GameBootstrap.MakeRadialSprite();
-            glow.color = new Color(1f, 0.95f, 0.7f, 0f);
-            glow.enabled = false;
+            EnsureGlowHalo(anchor.transform, createIfMissing: true);
 
             var panel = ProcMesh.RoundedCube("OfferPanel");
-            var pcol = panel.GetComponent<Collider>();
-            if (pcol != null) Object.Destroy(pcol);
+            DestroyCol(panel);
             panel.transform.SetParent(anchor.transform, false);
-            panel.transform.localPosition = Vector3.zero;
-            panel.transform.localScale = new Vector3(1.7f, 1.05f, 0.08f);
+            panel.transform.localPosition = new Vector3(0f, -0.20f, -0.07f);
+            panel.transform.localScale = new Vector3(1.35f, 0.50f, 0.09f);
             offerPanel = panel.GetComponent<Renderer>();
-            offerPanel.sharedMaterial = GameBootstrap.NewLitMaterial(OfferGreen);
+            var btnMat = GameBootstrap.NewLitMaterial(OfferGreen);
+            btnMat.SetFloat("_Smoothness", 0.38f);
+            offerPanel.sharedMaterial = btnMat;
 
             offerLabel = GameBootstrap.MakeWorldText("+4 slots", anchor.transform,
-                new Vector3(0f, 0.28f, -0.07f), 0.05f, Color.white, 80);
+                new Vector3(0f, 0.30f, -0.07f), 0.048f, Color.white, 80);
             offerLabel.gameObject.name = "OfferLabel";
 
-            // Coin (basit sarı disk)
             var coin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             coin.name = "Coin";
-            var ccol = coin.GetComponent<Collider>();
-            if (ccol != null) Object.Destroy(ccol);
+            DestroyCol(coin);
             coin.transform.SetParent(anchor.transform, false);
-            coin.transform.localPosition = new Vector3(-0.42f, -0.26f, -0.07f);
+            coin.transform.localPosition = new Vector3(-0.36f, -0.20f, -0.08f);
             coin.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            coin.transform.localScale = new Vector3(0.28f, 0.02f, 0.28f);
+            coin.transform.localScale = new Vector3(0.24f, 0.018f, 0.24f);
             coin.GetComponent<Renderer>().sharedMaterial =
                 GameBootstrap.NewLitMaterial(new Color(1f, 0.82f, 0.10f));
 
             offerAmount = GameBootstrap.MakeWorldText("400", anchor.transform,
-                new Vector3(0.12f, -0.26f, -0.07f), 0.05f, new Color(1f, 0.95f, 0.6f), 80);
+                new Vector3(0.14f, -0.20f, -0.08f), 0.048f, Color.white, 80);
             offerAmount.gameObject.name = "OfferAmount";
         }
 
         /// <summary>
-        /// Sahnede önceden var olan (baked) dock'un referanslarını çocuklardan
-        /// yeniden bağlar (Init çağrılmaz; geometri yeniden yaratılmaz). Inspector'da
-        /// taşınmışsa slot konumları güncel çocuklardan okunur.
+        /// Yuvarlak halo (sprite). Konum/ölçek Inspector'dan ayarlanır; runtime'da
+        /// SADECE alpha hafifçe nabız atar — transform ezilmez.
         /// </summary>
+        void EnsureGlowHalo(Transform offerParent, bool createIfMissing)
+        {
+            var glowT = offerParent.Find("DockGlow");
+            if (glowT == null)
+            {
+                if (!createIfMissing) return;
+                var go = new GameObject("DockGlow");
+                go.transform.SetParent(offerParent, false);
+                go.transform.localPosition = new Vector3(0f, 0f, 0.12f);
+                go.transform.localScale = Vector3.one * 4.8f;
+                glowSr = go.AddComponent<SpriteRenderer>();
+                glowSr.sprite = GameBootstrap.MakeGlowSprite();
+                glowSr.color = new UnityEngine.Color(GlowTint.r, GlowTint.g, GlowTint.b, 0f);
+                glowSr.sortingOrder = 10;
+                glowRoot = go.transform;
+            }
+            else
+            {
+                glowRoot = glowT;
+                RemoveLegacyQuadLayers(glowT);
+                glowSr = glowT.GetComponent<SpriteRenderer>();
+                if (glowSr == null)
+                    glowSr = glowT.GetComponentInChildren<SpriteRenderer>(true);
+                if (glowSr == null && createIfMissing)
+                {
+                    glowSr = glowT.gameObject.AddComponent<SpriteRenderer>();
+                    glowSr.sprite = GameBootstrap.MakeGlowSprite();
+                    glowSr.color = new UnityEngine.Color(GlowTint.r, GlowTint.g, GlowTint.b, 0f);
+                }
+            }
+
+            CaptureGlowBaseline();
+            SetGlowVisible(false);
+        }
+
+        /// <summary>Eski kare quad katmanlarını kaldırır; kök transform korunur.</summary>
+        static void RemoveLegacyQuadLayers(Transform glowT)
+        {
+            for (int i = glowT.childCount - 1; i >= 0; i--)
+            {
+                var ch = glowT.GetChild(i);
+                if (ch.name.StartsWith("GlowLayer_"))
+                    Object.Destroy(ch.gameObject);
+            }
+            var mf = glowT.GetComponent<MeshFilter>();
+            if (mf != null && glowT.GetComponent<SpriteRenderer>() == null)
+                Object.Destroy(mf);
+            var mr = glowT.GetComponent<MeshRenderer>();
+            if (mr != null && glowT.GetComponent<SpriteRenderer>() == null)
+                Object.Destroy(mr);
+        }
+
+        void CaptureGlowBaseline()
+        {
+            if (glowSr == null) return;
+            glowBaseAlpha = glowSr.color.a > 0.05f ? glowSr.color.a : GlowAlphaOnFail;
+        }
+
+        void ResolveGlowRef()
+        {
+            if (offerRoot != null && glowRoot == null)
+                glowRoot = offerRoot.Find("DockGlow");
+            if (glowRoot == null) return;
+            if (glowSr == null)
+                glowSr = glowRoot.GetComponent<SpriteRenderer>()
+                         ?? glowRoot.GetComponentInChildren<SpriteRenderer>(true);
+            if (glowSr != null && glowSr.sprite == null)
+                glowSr.sprite = GameBootstrap.MakeGlowSprite();
+        }
+
+        void SetGlowVisible(bool on)
+        {
+            glowActive = on;
+            ResolveGlowRef();
+
+            if (offerRoot != null)
+            {
+                foreach (var sr in offerRoot.GetComponentsInChildren<SpriteRenderer>(true))
+                {
+                    sr.gameObject.SetActive(on);
+                    sr.enabled = on;
+                    if (on && sr.color.a < 0.5f)
+                        sr.color = new UnityEngine.Color(GlowTint.r, GlowTint.g, GlowTint.b, glowBaseAlpha);
+                }
+            }
+
+            if (glowRoot != null)
+                glowRoot.gameObject.SetActive(on);
+            if (glowSr != null)
+            {
+                glowSr.enabled = on;
+                if (on)
+                    glowSr.color = new UnityEngine.Color(GlowTint.r, GlowTint.g, GlowTint.b, glowBaseAlpha);
+            }
+        }
+
+        /// <summary>Sadece alpha nabzı — konum/scale DOKUNULMAZ (Inspector ayarı korunur).</summary>
+        void PulseGlow()
+        {
+            if (!glowActive) return;
+            ResolveGlowRef();
+            if (glowSr == null || !glowSr.enabled) return;
+            float pulse = 0.96f + Mathf.Sin(Time.time * 2.8f) * 0.04f;
+            float a = glowBaseAlpha * pulse;
+            glowSr.color = new UnityEngine.Color(GlowTint.r * 1.1f, GlowTint.g * 1.05f, GlowTint.b, a);
+        }
+
         public void Rebind()
         {
             var trayT = transform.Find("DockTray");
             trayRend = trayT != null ? trayT.GetComponent<Renderer>() : null;
+            var innerT = transform.Find("DockTrayInner");
+            trayInnerRend = innerT != null ? innerT.GetComponent<Renderer>() : null;
 
+            var pocketList = new List<Renderer>();
             var slotList = new List<Vector3>();
             for (int i = 0; ; i++)
             {
                 var sl = transform.Find("DockSlot_" + i);
                 if (sl == null) break;
-                slotList.Add(sl.position + Vector3.up * (CardY - SlotY));
+                pocketList.Add(sl.GetComponent<Renderer>());
+                slotList.Add(sl.position + Vector3.up * (CardY - SlotPocketY));
             }
+            slotPockets = pocketList.ToArray();
             slots = slotList.ToArray();
             Capacity = slotList.Count;
             Count = 0;
@@ -168,11 +296,9 @@ namespace CardFactory.Gameplay
             if (offer != null)
             {
                 offerRoot = offer;
-                // Eski Billboard'ı kaldır → rotasyon Inspector'da verildiği gibi kalsın (Play'de kaymaz).
-                var bb = offer.GetComponent<CardFactory.Feedback.Billboard>();
+                var bb = offer.GetComponent<Billboard>();
                 if (bb != null) Destroy(bb);
-                var glowT = offer.Find("DockGlow");
-                glow = glowT != null ? glowT.GetComponent<SpriteRenderer>() : null;
+                EnsureGlowHalo(offer, createIfMissing: true);
                 var panelT = offer.Find("OfferPanel");
                 offerPanel = panelT != null ? panelT.GetComponent<Renderer>() : null;
                 var labelT = offer.Find("OfferLabel");
@@ -180,12 +306,14 @@ namespace CardFactory.Gameplay
                 var amountT = offer.Find("OfferAmount");
                 offerAmount = amountT != null ? amountT.GetComponent<TextMesh>() : null;
             }
+
+            // Eski DockGlowFloor artık kullanılmıyor.
+            var oldFloor = transform.Find("DockGlowFloor");
+            if (oldFloor != null) oldFloor.gameObject.SetActive(false);
+
+            SetGlowVisible(false);
         }
 
-        /// <summary>
-        /// Level fail olunca: teklif "New Dock / 1000" olur ve dock'a özel bir spot
-        /// ışığı yanar (alana dikkat çeker).
-        /// </summary>
         public void ShowFailOffer()
         {
             if (failShown) return;
@@ -195,58 +323,73 @@ namespace CardFactory.Gameplay
             if (offerAmount != null) offerAmount.text = "1000";
             if (offerRoot != null) Juice.PunchScale(offerRoot, Vector3.one, 0.25f, 0.3f);
 
-            if (glow != null)
-            {
-                glow.enabled = true;
-                glow.color = new Color(1f, 0.95f, 0.7f, 1f);
-                glow.transform.localScale = Vector3.one * 2.0f;   // yerel, dar hale
-            }
+            ResolveGlowRef();
+            CaptureGlowBaseline();
+            if (glowBaseAlpha < 0.75f) glowBaseAlpha = GlowAlphaOnFail;
+            SetGlowVisible(true);
         }
 
-        /// <summary>Her yeni level'de güncel GameManager'a bağlanır (dock kalıcı).</summary>
         public void Bind(GameManager gameManager) => gm = gameManager;
 
-        /// <summary>Yeni level başlarken dock durumunu sıfırlar (dock objesi kalıcı).</summary>
         public void ResetForNewLevel()
         {
             Count = 0;
             failShown = false;
-            // Görünüşü (offer rengi, tray rengi) RUNTIME'DA ezme → Inspector ayarların kalsın.
-            // Tray sadece tansiyon nabzı açıkken sıfırlanır (reklam modu).
-            if (tensionEnabled && trayRend != null) SetTray(TrayBase);
+
+            if (slotPockets != null)
+                foreach (var p in slotPockets)
+                    if (p != null) p.enabled = true;
+
+            if (tensionEnabled)
+            {
+                ResetTrayColors();
+            }
+
             if (offerLabel != null) offerLabel.text = "+4 slots";
             if (offerAmount != null) offerAmount.text = "400";
-            if (glow != null)
-            {
-                glow.enabled = false;
-                glow.color = new Color(1f, 0.95f, 0.7f, 0f);
-                glow.transform.localScale = Vector3.one * 2.0f;
-            }
+            SetGlowVisible(false);
         }
 
-        /// <summary>Tansiyon nabzını aç/kapa (reklam için saklanır).</summary>
         public void SetTension(bool on) => tensionEnabled = on;
 
-        // Tansiyon nabzı: dock doldukça tepsi kırmızıya doğru, hızlanan bir nabızla yanar.
         void Update()
         {
-            if (!tensionEnabled || trayRend == null) return;
-            float ratio = Capacity > 0 ? (float)Count / Capacity : 0f;
+            if (glowActive) PulseGlow();
+            UpdateTensionPulse();
+        }
+
+        void UpdateTensionPulse()
+        {
+            if (!tensionEnabled || Capacity <= 0) return;
+
+            float ratio = (float)Count / Capacity;
             if (ratio < 0.5f)
             {
-                SetTray(TrayBase);
+                ResetTrayColors();
                 return;
             }
+
             float intensity = Mathf.InverseLerp(0.5f, 1f, ratio);
             float speed = Mathf.Lerp(3f, 11f, ratio);
             float k = (Mathf.Sin(Time.time * speed) * 0.5f + 0.5f) * intensity;
-            SetTray(Color.Lerp(TrayBase, new Color(0.95f, 0.18f, 0.18f), k));
+            var red = new UnityEngine.Color(0.95f, 0.18f, 0.18f);
+
+            if (trayInnerRend != null)
+                SetRendererColor(trayInnerRend, UnityEngine.Color.Lerp(TrayInner, red, k));
+            if (trayRend != null)
+                SetRendererColor(trayRend, UnityEngine.Color.Lerp(TrayOuter, red, k * 0.55f));
         }
 
-        void SetTray(Color c)
+        void ResetTrayColors()
         {
-            trayRend.sharedMaterial.color = c;
-            trayRend.sharedMaterial.SetColor("_BaseColor", c);
+            if (trayInnerRend != null) SetRendererColor(trayInnerRend, TrayInner);
+            if (trayRend != null) SetRendererColor(trayRend, TrayOuter);
+        }
+
+        static void SetRendererColor(Renderer rend, UnityEngine.Color c)
+        {
+            rend.sharedMaterial.color = c;
+            rend.sharedMaterial.SetColor("_BaseColor", c);
         }
 
         public void Receive(Card card)
@@ -257,14 +400,23 @@ namespace CardFactory.Gameplay
                 return;
             }
 
-            Vector3 target = slots[Count];
+            int idx = Count;
+            Vector3 target = slots[idx];
             Count++;
             card.State = CardState.Dock;
-            // Slota dik oturan ince kart görünümü
-            card.transform.localScale = new Vector3(0.30f, 0.5f, 0.08f);
+
+            if (slotPockets != null && idx < slotPockets.Length && slotPockets[idx] != null)
+                slotPockets[idx].enabled = false;
+
+            card.transform.localScale = DockCardScale;
+            card.transform.rotation = DockCardRot;
             card.MoveTo(target, 0.25f, () =>
             {
-                if (card != null) Juice.PunchScale(card.transform, card.transform.localScale, 0.18f, 0.12f);
+                if (card != null)
+                {
+                    card.transform.rotation = DockCardRot;
+                    Juice.PunchScale(card.transform, DockCardScale, 0.12f, 0.12f);
+                }
             });
             Sfx.Play("fill");
 
