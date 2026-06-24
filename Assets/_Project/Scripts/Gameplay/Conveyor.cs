@@ -72,8 +72,7 @@ namespace CardFactory.Gameplay
 
         void SpawnCard(CardColor color)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "Card_" + color;
+            var go = Feedback.ProcMesh.RoundedCube("Card_" + color);
             go.transform.SetParent(transform, true);
             var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col);

@@ -313,9 +313,17 @@ namespace CardFactory.Core
             return pts;
         }
 
+        const float BeltWidth = 1.6f;
+
         static void BuildBeltVisual(Transform parent, List<Vector3> pts)
         {
-            var mat = NewLitMaterial(new Color(0.40f, 0.45f, 0.55f));
+            var beltRoot = new GameObject("Belt");
+            beltRoot.transform.SetParent(parent, false);
+
+            var surfaceMat = NewLitMaterial(new Color(0.33f, 0.39f, 0.49f));
+            var railMat = NewLitMaterial(new Color(0.56f, 0.61f, 0.70f));
+            const float railW = 0.16f;
+
             for (int i = 0; i < pts.Count - 1; i++)
             {
                 Vector3 a = pts[i], b = pts[i + 1];
@@ -323,24 +331,80 @@ namespace CardFactory.Core
                 float len = dir.magnitude;
                 if (len < 0.001f) continue;
 
+                Vector3 fwd = dir / len;
+                Vector3 mid = (a + b) * 0.5f;
+                Quaternion rot = Quaternion.LookRotation(fwd, Vector3.up);
+                Vector3 side = Vector3.Cross(Vector3.up, fwd).normalized;
+
+                // Bant yüzeyi (düz tutulur; uzun parçalarda yuvarlatma istenmez).
                 var seg = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 seg.name = "BeltSeg";
-                var col = seg.GetComponent<Collider>();
-                if (col != null) Object.Destroy(col);
-                seg.transform.SetParent(parent, false);
-                Vector3 mid = (a + b) * 0.5f;
+                var scol = seg.GetComponent<Collider>();
+                if (scol != null) Object.Destroy(scol);
+                seg.transform.SetParent(beltRoot.transform, false);
                 seg.transform.position = new Vector3(mid.x, 0.05f, mid.z);
-                seg.transform.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
-                seg.transform.localScale = new Vector3(1.5f, 0.2f, len + 0.12f);
-                seg.GetComponent<Renderer>().sharedMaterial = mat;
+                seg.transform.rotation = rot;
+                seg.transform.localScale = new Vector3(BeltWidth, 0.16f, len + 0.14f);
+                seg.GetComponent<Renderer>().sharedMaterial = surfaceMat;
+
+                // İki yan korkuluk.
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    rail.name = "BeltRail";
+                    var rcol = rail.GetComponent<Collider>();
+                    if (rcol != null) Object.Destroy(rcol);
+                    rail.transform.SetParent(beltRoot.transform, false);
+                    Vector3 rp = mid + side * (s * (BeltWidth * 0.5f + railW * 0.4f));
+                    rail.transform.position = new Vector3(rp.x, 0.13f, rp.z);
+                    rail.transform.rotation = rot;
+                    rail.transform.localScale = new Vector3(railW, 0.24f, len + 0.14f);
+                    rail.GetComponent<Renderer>().sharedMaterial = railMat;
+                }
             }
+
+            BuildBeltChevrons(beltRoot.transform, pts);
+        }
+
+        static void BuildBeltChevrons(Transform beltRoot, List<Vector3> pts)
+        {
+            var chevMat = NewLitMaterial(new Color(0.72f, 0.78f, 0.88f));
+            var flowGo = new GameObject("BeltFlow");
+            flowGo.transform.SetParent(beltRoot, false);
+            var flow = flowGo.AddComponent<BeltFlow>();
+
+            var p = new BeltPath(pts);
+            int count = Mathf.Max(6, Mathf.RoundToInt(p.Length / 1.0f));
+            var chevrons = new Transform[count];
+            for (int i = 0; i < count; i++)
+                chevrons[i] = BuildChevron(flowGo.transform, chevMat);
+
+            flow.Setup(pts.ToArray(), chevrons, 1.4f, 0.17f);
+        }
+
+        static Transform BuildChevron(Transform parent, Material mat)
+        {
+            var root = new GameObject("Chevron");
+            root.transform.SetParent(parent, false);
+            for (int s = -1; s <= 1; s += 2)
+            {
+                var arm = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                arm.name = "ChevArm";
+                var col = arm.GetComponent<Collider>();
+                if (col != null) Object.Destroy(col);
+                arm.transform.SetParent(root.transform, false);
+                arm.transform.localPosition = new Vector3(s * 0.16f, 0f, -0.07f);
+                arm.transform.localRotation = Quaternion.Euler(0f, -s * 32f, 0f);
+                arm.transform.localScale = new Vector3(0.07f, 0.05f, 0.5f);
+                arm.GetComponent<Renderer>().sharedMaterial = mat;
+            }
+            return root.transform;
         }
 
         static FactoryGate BuildGate(Transform parent, GameConfig config, Vector3 startPt)
         {
             // Makine gövdesi
-            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            body.name = "FactoryGate";
+            var body = ProcMesh.RoundedCube("FactoryGate");
             var col = body.GetComponent<Collider>();
             if (col != null) Object.Destroy(col);
             body.transform.SetParent(parent, false);
@@ -351,8 +415,7 @@ namespace CardFactory.Core
             body.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(gateColor);
 
             // Ekran (öne dönük, koyu) — sayaç UI'ı bunun üstüne oturur
-            var screen = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            screen.name = "GateScreen";
+            var screen = ProcMesh.RoundedCube("GateScreen");
             var scol = screen.GetComponent<Collider>();
             if (scol != null) Object.Destroy(scol);
             screen.transform.SetParent(parent, false);
@@ -424,8 +487,7 @@ namespace CardFactory.Core
 
         static void BuildEndCap(Transform parent, Vector3 endPt)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "BeltEndCap";
+            var go = ProcMesh.RoundedCube("BeltEndCap");
             var col = go.GetComponent<Collider>();
             if (col != null) Object.Destroy(col);
             go.transform.SetParent(parent, false);
@@ -550,7 +612,7 @@ namespace CardFactory.Core
             foreach (var rend in world.GetComponentsInChildren<Renderer>(true))
             {
                 var m = rend.sharedMaterial;
-                if (m != null && m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.3f);
+                if (m != null && m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.45f);
             }
 
             // Post-processing volume (her açılışta taze kur → serialize sorunlarından bağımsız)
@@ -641,7 +703,7 @@ namespace CardFactory.Core
             }
             var mat = new Material(shader) { color = color };
             mat.SetColor("_BaseColor", color);
-            mat.SetFloat("_Smoothness", 0.32f);   // hafif parlaklık (cila)
+            mat.SetFloat("_Smoothness", 0.5f);   // parlak "cartoon" cila
             mat.SetFloat("_Metallic", 0f);
             return mat;
         }

@@ -47,8 +47,7 @@ namespace CardFactory.Gameplay
             transform.rotation = Quaternion.Euler(LeanBack, 0f, 0f);
 
             // Kasa gövdesi — koyu çerçeve.
-            var bodyGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            bodyGo.name = "BinBody";
+            var bodyGo = ProcMesh.RoundedCube("BinBody");
             DestroyCollider(bodyGo);
             bodyGo.transform.SetParent(transform, false);
             bodyGo.transform.localPosition = new Vector3(0f, BodyHeight * 0.5f, 0.06f);
@@ -117,8 +116,7 @@ namespace CardFactory.Gameplay
             float slotH = BodyHeight / capacity;
             for (int i = 0; i < capacity; i++)
             {
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                go.name = "Slot_" + i;
+                var go = ProcMesh.RoundedCube("Slot_" + i);
                 DestroyCollider(go);
                 go.transform.SetParent(transform, false);
                 go.transform.localPosition = new Vector3(0f, (i + 0.5f) * slotH, SlotFrontZ);

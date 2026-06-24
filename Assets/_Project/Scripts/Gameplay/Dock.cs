@@ -50,8 +50,7 @@ namespace CardFactory.Gameplay
             float xStart = -width * 0.5f;
 
             // Tepsi tabanı (açık renk bar)
-            var tray = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            tray.name = "DockTray";
+            var tray = ProcMesh.RoundedCube("DockTray");
             var tcol = tray.GetComponent<Collider>();
             if (tcol != null) Object.Destroy(tcol);
             tray.transform.SetParent(transform, false);
@@ -67,8 +66,7 @@ namespace CardFactory.Gameplay
                 float x = xStart + i * Spacing;
                 slots[i] = new Vector3(x, CardY, centerZ);
 
-                var marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                marker.name = "DockSlot_" + i;
+                var marker = ProcMesh.RoundedCube("DockSlot_" + i);
                 var mcol = marker.GetComponent<Collider>();
                 if (mcol != null) Object.Destroy(mcol);
                 marker.transform.SetParent(transform, false);
@@ -79,8 +77,7 @@ namespace CardFactory.Gameplay
 
             // "+4 slots" kaidesi (dock'un sağ ucunda, yükseltilmiş koyu mavi blok).
             float pedX = width * 0.5f + 1.15f;
-            var pedestal = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            pedestal.name = "SlotsPedestal";
+            var pedestal = ProcMesh.RoundedCube("SlotsPedestal");
             var pcol = pedestal.GetComponent<Collider>();
             if (pcol != null) Object.Destroy(pcol);
             pedestal.transform.SetParent(transform, false);
@@ -115,8 +112,7 @@ namespace CardFactory.Gameplay
             glow.color = new Color(1f, 0.95f, 0.7f, 0f);
             glow.enabled = false;
 
-            var panel = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            panel.name = "OfferPanel";
+            var panel = ProcMesh.RoundedCube("OfferPanel");
             var pcol = panel.GetComponent<Collider>();
             if (pcol != null) Object.Destroy(pcol);
             panel.transform.SetParent(anchor.transform, false);

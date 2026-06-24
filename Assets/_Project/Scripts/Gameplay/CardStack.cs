@@ -65,8 +65,7 @@ namespace CardFactory.Gameplay
             for (int v = 0; v < show; v++)
             {
                 var color = cards[start + v];
-                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                go.name = "DeckCard_" + color;
+                var go = Feedback.ProcMesh.RoundedCube("DeckCard_" + color);
                 var col = go.GetComponent<Collider>();
                 if (col != null) Destroy(col);
                 go.transform.SetParent(transform, false);
