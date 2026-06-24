@@ -273,10 +273,17 @@ namespace CardFactory.Core
 
             if (config.showHandPointer)
             {
-                var firstColor = level.binColorOrder.Count > 0 ? level.binColorOrder[0] : (CardColor?)null;
+                // Karışık destelerde binColorOrder[0] hiçbir tepede olmayabilir.
+                // Geçerli ilk hamleyi göster: tepesi binColorOrder'da EN ERKEN gelen deste.
                 CardStack target = null;
+                int bestIdx = int.MaxValue;
                 foreach (var s in stacks)
-                    if (firstColor.HasValue && s.TopColor == firstColor.Value) { target = s; break; }
+                {
+                    if (!s.TopColor.HasValue) continue;
+                    int idx = level.binColorOrder.IndexOf(s.TopColor.Value);
+                    if (idx < 0) idx = int.MaxValue;
+                    if (idx < bestIdx) { bestIdx = idx; target = s; }
+                }
                 if (target == null && stacks.Count > 0) target = stacks[0];
                 if (target != null)
                 {
