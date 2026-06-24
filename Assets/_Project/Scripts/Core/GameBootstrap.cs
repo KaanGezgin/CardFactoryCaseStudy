@@ -28,13 +28,26 @@ namespace CardFactory.Core
 
         static int? pendingBuild;
 
+        // Kalıcı ortam (her level'de yeniden yaratılmaz) referansları.
+        static GameObject levelRoot;
+        static Dock dock;
+        static FactoryGate gate;
+        static BeltPath path;
+
+        static readonly Vector3[] BinSlots =
+        {
+            new Vector3(-0.95f, 0f, 0.3f),
+            new Vector3(0.95f, 0f, 0.3f),
+        };
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Boot()
         {
             var runnerGo = new GameObject("GameRunner");
             runnerGo.AddComponent<GameRunner>();
             Object.DontDestroyOnLoad(runnerGo);
-            Build(0);
+            BuildWorld();
+            BuildLevel(0);
         }
 
         public static void RequestRebuild(int levelIndex) => pendingBuild = levelIndex;
@@ -44,60 +57,135 @@ namespace CardFactory.Core
             if (!pendingBuild.HasValue) return;
             int idx = pendingBuild.Value;
             pendingBuild = null;
-            Build(idx);
+            BuildLevel(idx);
         }
 
-        public static void Build(int levelIndex)
+        /// <summary>
+        /// KALICI ortamı bir kez kurar: kamera, ışık, zemin, U-yol + baş/son objeler,
+        /// kapı (0/20 ekranı), dock tepsisi + slotları + teklif + fail ışığı. Bunlar
+        /// level değiştikçe yeniden yaratılmaz.
+        /// </summary>
+        static void BuildWorld()
         {
+            var existing = GameObject.Find("CardFactoryWorld");
+            if (existing != null && IsWorldComplete(existing))
+            {
+                ReuseWorld(existing);
+                Debug.Log("[GameBootstrap] Mevcut dünya yeniden kullanıldı (yeniden yaratılmadı).");
+                return;
+            }
+
+            if (existing != null) Object.DestroyImmediate(existing); // eksik → baştan kur
             CleanScene();
+            BuildWorldObjects();
+            Debug.Log("[GameBootstrap] Kalıcı ortam (runtime) kuruldu.");
+        }
+
+        static bool IsWorldComplete(GameObject world)
+        {
+            return world.GetComponentInChildren<Dock>(true) != null
+                && world.GetComponentInChildren<FactoryGate>(true) != null
+                && world.GetComponentInChildren<Camera>(true) != null;
+        }
+
+        /// <summary>
+        /// Sahnede zaten var olan (baked) dünyayı yeniden YARATMADAN kullanır:
+        /// referansları yeniden bağlar, yol verisini yeniden hesaplar, fazla
+        /// kamera/listener varsa temizler. Inspector'daki düzenlemeler korunur.
+        /// </summary>
+        static void ReuseWorld(GameObject world)
+        {
+            path = new BeltPath(BuildUPath());   // yol verisi (serialize edilmez)
+            dock = world.GetComponentInChildren<Dock>(true);
+            gate = world.GetComponentInChildren<FactoryGate>(true);
+            if (dock != null) dock.Rebind();
+            if (gate != null) gate.Rebind(GameConfig.Default);
+
+            foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
+                if (cam != null && !cam.transform.IsChildOf(world.transform))
+                    Object.DestroyImmediate(cam.gameObject);
+            foreach (var al in Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+                if (al != null && !al.transform.IsChildOf(world.transform))
+                    Object.DestroyImmediate(al.gameObject);
+        }
+
+        /// <summary>
+        /// Kalıcı ortam objelerini oluşturur (CleanScene/runner YOK). Hem runtime
+        /// BuildWorld hem de Editör 'Bake World' aracı bunu kullanır.
+        /// </summary>
+        public static GameObject BuildWorldObjects()
+        {
+            var config = GameConfig.Default;
+            var world = new GameObject("CardFactoryWorld");
+
+            BuildCamera(config, world.transform);
+            BuildLight(world.transform);
+            BuildGround(world.transform);
+
+            var pathPts = BuildUPath();
+            path = new BeltPath(pathPts);
+            BuildBeltVisual(world.transform, pathPts);
+
+            gate = BuildGate(world.transform, config, pathPts[0]);
+            BuildEndCap(world.transform, pathPts[pathPts.Count - 1]);
+
+            dock = new GameObject("Dock").AddComponent<Dock>();
+            dock.transform.SetParent(world.transform, false);
+            dock.Init(config.dockCapacity, DockZ);
+            return world;
+        }
+
+        /// <summary>
+        /// Editör 'Bake World' için: eski baked dünyayı + fazla kamera/listener'ı
+        /// temizler ve kalıcı ortamı SAHNEYE gerçek obje olarak kurar (edit mode).
+        /// </summary>
+        public static GameObject BakeWorld()
+        {
+            DestroyByName("CardFactory");
+            DestroyByName("CardFactoryWorld");
+            DestroyByName("CardFactoryLevel");
+            foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
+                if (cam != null) Object.DestroyImmediate(cam.gameObject);
+            foreach (var al in Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+                if (al != null) Object.DestroyImmediate(al.gameObject);
+            return BuildWorldObjects();
+        }
+
+        /// <summary>
+        /// PER-LEVEL içeriği (yeniden) kurar: yöneticiler, kutular, konveyör+kartlar,
+        /// desteler, input, ghost pointer, HUD paneli. Kalıcı ortam korunur; dock/kapı
+        /// durumu sıfırlanır.
+        /// </summary>
+        public static void BuildLevel(int levelIndex)
+        {
+            if (dock == null || gate == null || path == null) BuildWorld();
+            if (levelRoot != null) Object.DestroyImmediate(levelRoot);
+
+            dock.ResetForNewLevel();
+            gate.ResetVisual();
 
             var config = GameConfig.Default;
             var level = DefaultLevels.Get(levelIndex);
-            var root = new GameObject("CardFactory");
-
-            BuildCamera(config, root.transform);
-            BuildLight(root.transform);
-            BuildGround(root.transform);
-
-            var pathPts = BuildUPath();
-            var path = new BeltPath(pathPts);
-            BuildBeltVisual(root.transform, pathPts);
+            levelRoot = new GameObject("CardFactoryLevel");
 
             var gm = new GameObject("GameManager").AddComponent<GameManager>();
-            gm.transform.SetParent(root.transform, false);
+            gm.transform.SetParent(levelRoot.transform, false);
             gm.Init(config, levelIndex, level);
+            dock.Bind(gm);
 
-            var gate = BuildGate(root.transform, config, pathPts[0]);
-            BuildEndCap(root.transform, pathPts[pathPts.Count - 1]);
-
-            // Dock
-            var dock = new GameObject("Dock").AddComponent<Dock>();
-            dock.transform.SetParent(root.transform, false);
-            int dockCap = level.dockCapacity > 0 ? level.dockCapacity : config.dockCapacity;
-            dock.Init(dockCap, gm, DockZ);
-
-            // Kutular (U'nun ortasında, yan yana)
             var binMgr = new GameObject("BinManager").AddComponent<BinManager>();
-            binMgr.transform.SetParent(root.transform, false);
-            var slotPositions = new[]
-            {
-                new Vector3(-0.95f, 0f, 0.3f),
-                new Vector3(0.95f, 0f, 0.3f),
-            };
-            binMgr.Init(config, level, gm, slotPositions, path);
+            binMgr.transform.SetParent(levelRoot.transform, false);
+            binMgr.Init(config, level, gm, BinSlots, path);
 
-            // Conveyor
             var conveyor = new GameObject("Conveyor").AddComponent<Conveyor>();
-            conveyor.transform.SetParent(root.transform, false);
+            conveyor.transform.SetParent(levelRoot.transform, false);
             conveyor.Init(config, gm, binMgr, dock, gate, path);
 
-            // Desteler
-            var stacks = BuildStacks(root.transform, level, conveyor);
+            var stacks = BuildStacks(levelRoot.transform, level, conveyor);
             gm.SetSystems(stacks, conveyor);
 
-            // Input
             var input = new GameObject("InputController").AddComponent<InputController>();
-            input.transform.SetParent(root.transform, false);
+            input.transform.SetParent(levelRoot.transform, false);
             input.Init(Camera.main, gm);
 
             // Ghost el-pointer: ilk güvenli hamleyi (aktif renk tepedeki desteyi) gösterir
@@ -109,17 +197,16 @@ namespace CardFactory.Core
             if (target != null)
             {
                 var hp = new GameObject("HandPointer").AddComponent<HandPointer>();
-                hp.transform.SetParent(root.transform, false);
+                hp.transform.SetParent(levelRoot.transform, false);
                 hp.Init(target.transform.position, input);
             }
 
-            // HUD — kazan/kaybet paneli + butonlar (sayaç ve dock teklifi artık 3B/gömülü)
+            // HUD — kazan/kaybet paneli
             var hud = new GameObject("HudController").AddComponent<HudController>();
-            hud.transform.SetParent(root.transform, false);
-            hud.Init(gm, dock, root.transform);
+            hud.transform.SetParent(levelRoot.transform, false);
+            hud.Init(gm, dock, levelRoot.transform);
 
-            Debug.Log($"[GameBootstrap] Level {levelIndex + 1} kuruldu " +
-                      $"(yığın {level.stacks.Count}, kart {level.TotalCards}).");
+            Debug.Log($"[GameBootstrap] Level {levelIndex + 1} içeriği kuruldu (kart {level.TotalCards}).");
         }
 
         static List<Vector3> BuildUPath()
@@ -286,14 +373,21 @@ namespace CardFactory.Core
 
         static void CleanScene()
         {
-            var oldRoot = GameObject.Find("CardFactory");
-            if (oldRoot != null) Object.DestroyImmediate(oldRoot);
+            DestroyByName("CardFactory");
+            DestroyByName("CardFactoryWorld");
+            DestroyByName("CardFactoryLevel");
 
             foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
                 if (cam != null) Object.DestroyImmediate(cam.gameObject);
 
             foreach (var al in Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
                 if (al != null) Object.DestroyImmediate(al.gameObject);
+        }
+
+        static void DestroyByName(string n)
+        {
+            var go = GameObject.Find(n);
+            if (go != null) Object.DestroyImmediate(go);
         }
 
         static void BuildCamera(GameConfig config, Transform parent)

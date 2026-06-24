@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CardFactory.Core;
 using CardFactory.Feedback;
 using UnityEngine;
@@ -37,11 +38,10 @@ namespace CardFactory.Gameplay
         const float SlotY = 0.05f;
         const float CardY = 0.32f;
 
-        public void Init(int capacity, GameManager gameManager, float centerZ)
+        public void Init(int capacity, float centerZ)
         {
             Capacity = capacity;
             Count = 0;
-            gm = gameManager;
             this.centerZ = centerZ;
             slots = new Vector3[capacity];
 
@@ -125,6 +125,7 @@ namespace CardFactory.Gameplay
 
             offerLabel = GameBootstrap.MakeWorldText("+4 slots", anchor.transform,
                 new Vector3(0f, 0.28f, -0.07f), 0.05f, Color.white, 80);
+            offerLabel.gameObject.name = "OfferLabel";
 
             // Coin (basit sarı disk)
             var coin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -140,6 +141,44 @@ namespace CardFactory.Gameplay
 
             offerAmount = GameBootstrap.MakeWorldText("400", anchor.transform,
                 new Vector3(0.12f, -0.26f, -0.07f), 0.05f, new Color(1f, 0.95f, 0.6f), 80);
+            offerAmount.gameObject.name = "OfferAmount";
+        }
+
+        /// <summary>
+        /// Sahnede önceden var olan (baked) dock'un referanslarını çocuklardan
+        /// yeniden bağlar (Init çağrılmaz; geometri yeniden yaratılmaz). Inspector'da
+        /// taşınmışsa slot konumları güncel çocuklardan okunur.
+        /// </summary>
+        public void Rebind()
+        {
+            var trayT = transform.Find("DockTray");
+            trayRend = trayT != null ? trayT.GetComponent<Renderer>() : null;
+
+            var slotList = new List<Vector3>();
+            for (int i = 0; ; i++)
+            {
+                var sl = transform.Find("DockSlot_" + i);
+                if (sl == null) break;
+                slotList.Add(sl.position + Vector3.up * (CardY - SlotY));
+            }
+            slots = slotList.ToArray();
+            Capacity = slotList.Count;
+            Count = 0;
+            failShown = false;
+
+            var offer = transform.Find("DockOffer");
+            if (offer != null)
+            {
+                offerRoot = offer;
+                var glowT = offer.Find("DockGlow");
+                glow = glowT != null ? glowT.GetComponent<SpriteRenderer>() : null;
+                var panelT = offer.Find("OfferPanel");
+                offerPanel = panelT != null ? panelT.GetComponent<Renderer>() : null;
+                var labelT = offer.Find("OfferLabel");
+                offerLabel = labelT != null ? labelT.GetComponent<TextMesh>() : null;
+                var amountT = offer.Find("OfferAmount");
+                offerAmount = amountT != null ? amountT.GetComponent<TextMesh>() : null;
+            }
         }
 
         /// <summary>
@@ -162,6 +201,26 @@ namespace CardFactory.Gameplay
                 glow.enabled = true;
                 glow.color = new Color(1f, 0.95f, 0.7f, 1f);
                 glow.transform.localScale = Vector3.one * 4.0f;   // panel önünde belirgin kalsın
+            }
+        }
+
+        /// <summary>Her yeni level'de güncel GameManager'a bağlanır (dock kalıcı).</summary>
+        public void Bind(GameManager gameManager) => gm = gameManager;
+
+        /// <summary>Yeni level başlarken dock durumunu sıfırlar (dock objesi kalıcı).</summary>
+        public void ResetForNewLevel()
+        {
+            Count = 0;
+            failShown = false;
+            if (trayRend != null) SetTray(TrayBase);
+            if (offerLabel != null) offerLabel.text = "+4 slots";
+            if (offerAmount != null) offerAmount.text = "400";
+            if (offerPanel != null) offerPanel.sharedMaterial = GameBootstrap.NewLitMaterial(OfferGreen);
+            if (glow != null)
+            {
+                glow.enabled = false;
+                glow.color = new Color(1f, 0.95f, 0.7f, 0f);
+                glow.transform.localScale = Vector3.one * 2.6f;
             }
         }
 

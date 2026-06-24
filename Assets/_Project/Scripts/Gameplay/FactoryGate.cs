@@ -27,6 +27,20 @@ namespace CardFactory.Gameplay
             label = counterLabel;
         }
 
+        /// <summary>
+        /// Baked kapının referanslarını yeniden bağlar (Init çağrılmaz). Sayaç
+        /// etiketi sahnedeki "GateCounter" altından bulunur.
+        /// </summary>
+        public void Rebind(GameConfig config)
+        {
+            cfg = config;
+            body = GetComponent<Renderer>();
+            if (body != null) baseColor = body.sharedMaterial.color;
+            var parent = transform.parent;
+            var anchor = parent != null ? parent.Find("GateCounter") : null;
+            if (anchor != null) label = anchor.GetComponentInChildren<TextMesh>();
+        }
+
         public void SetCount(int count, int max)
         {
             Count = count;
@@ -38,6 +52,18 @@ namespace CardFactory.Gameplay
                 label.color = count >= max ? new Color(1f, 0.35f, 0.35f)
                             : count >= max - 2 ? new Color(1f, 0.85f, 0.35f)
                             : Color.white;
+            }
+        }
+
+        /// <summary>Yeni level başlarken görseli sıfırlar (kapı kalıcı obje).</summary>
+        public void ResetVisual()
+        {
+            StopAllCoroutines();
+            WarningActive = false;
+            if (body != null)
+            {
+                body.sharedMaterial.SetColor("_BaseColor", baseColor);
+                body.sharedMaterial.color = baseColor;
             }
         }
 
