@@ -38,7 +38,13 @@ namespace CardFactory.Gameplay
             if (body != null) baseColor = body.sharedMaterial.color;
             var parent = transform.parent;
             var anchor = parent != null ? parent.Find("GateCounter") : null;
-            if (anchor != null) label = anchor.GetComponentInChildren<TextMesh>();
+            if (anchor != null)
+            {
+                label = anchor.GetComponentInChildren<TextMesh>();
+                // Eski Billboard'ı kaldır → rotasyon Inspector'daki gibi kalsın (Play'de kaymaz).
+                var bb = anchor.GetComponent<CardFactory.Feedback.Billboard>();
+                if (bb != null) Destroy(bb);
+            }
         }
 
         public void SetCount(int count, int max)

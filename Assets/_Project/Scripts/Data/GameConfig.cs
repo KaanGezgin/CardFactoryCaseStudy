@@ -31,9 +31,9 @@ namespace CardFactory.Data
         [Header("Kamera / sahne")]
         public Color backgroundColor = new Color(0.55f, 0.74f, 0.92f); // açık mavi (gerçek oyuna yakın)
 
-        [Header("Reklam için saklanan efektler (şimdilik kapalı)")]
-        public bool showHandPointer = false;    // ghost el-pointer
-        public bool dockTensionPulse = false;   // dock dolarken kırmızı nabız
+        [Header("Reklam efektleri")]
+        public bool showHandPointer = true;     // ghost el-pointer
+        public bool dockTensionPulse = true;    // dock dolarken kırmızı nabız
 
         public static GameConfig Default => new GameConfig();
     }

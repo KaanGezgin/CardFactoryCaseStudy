@@ -26,6 +26,8 @@ namespace CardFactory.Core
         const float StackZ = -6.0f;
         const float DockZ = -3.0f;
 
+        public const float CameraPitch = 62f;   // kamera eğimi; 3B etiketler bununla kameraya bakar
+
         static int? pendingBuild;
 
         // Kalıcı ortam (her level'de yeniden yaratılmaz) referansları.
@@ -361,7 +363,8 @@ namespace CardFactory.Core
             var counterAnchor = new GameObject("GateCounter");
             counterAnchor.transform.SetParent(parent, false);
             counterAnchor.transform.position = screen.transform.position + new Vector3(0f, 0.16f, -0.16f);
-            counterAnchor.AddComponent<CardFactory.Feedback.Billboard>();
+            // Billboard YOK: rotasyon bake'te kamera açısıyla sabitlenir (Inspector'da değiştirilebilir, Play'de kaymaz).
+            counterAnchor.transform.rotation = Quaternion.Euler(CameraPitch, 0f, 0f);
             var counter = MakeWorldText("0/20", counterAnchor.transform, Vector3.zero,
                 0.07f, Color.white, 90);
 
@@ -405,7 +408,8 @@ namespace CardFactory.Core
                 for (int x = 0; x < size; x++)
                 {
                     float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / maxR;
-                    float a = Mathf.Clamp01(1f - d);   // doğrusal düşüş (dolgun hale)
+                    float a = Mathf.Clamp01(1f - d);
+                    a *= a;   // kareli düşüş → daha yerel/yumuşak hale (geniş yayılmaz)
                     px[y * size + x] = new Color(1f, 1f, 1f, a);
                 }
             tex.SetPixels32(px);
@@ -478,7 +482,7 @@ namespace CardFactory.Core
 
             // Daha yukarıdan, daha dik (kuş bakışı) açı.
             camGo.transform.position = new Vector3(0f, 18f, -9f);
-            camGo.transform.rotation = Quaternion.Euler(62f, 0f, 0f);
+            camGo.transform.rotation = Quaternion.Euler(CameraPitch, 0f, 0f);
 
             camGo.AddComponent<AudioListener>();
             camGo.AddComponent<CameraRig>();

@@ -100,7 +100,8 @@ namespace CardFactory.Gameplay
             var anchor = new GameObject("DockOffer");
             anchor.transform.SetParent(transform, false);
             anchor.transform.position = pos;
-            anchor.AddComponent<CardFactory.Feedback.Billboard>();
+            // Billboard YOK: rotasyon bake'te kamera açısıyla sabit (Play'de kaymaz, Inspector'dan ayarlanabilir).
+            anchor.transform.rotation = Quaternion.Euler(GameBootstrap.CameraPitch, 0f, 0f);
             offerRoot = anchor.transform;
 
             // Işıksız (unlit) radyal hale: teklifin ARKASINDA, kameradan uzakta.
@@ -108,7 +109,7 @@ namespace CardFactory.Gameplay
             var glowGo = new GameObject("DockGlow");
             glowGo.transform.SetParent(anchor.transform, false);
             glowGo.transform.localPosition = new Vector3(0f, 0f, 0.12f);
-            glowGo.transform.localScale = Vector3.one * 2.6f;
+            glowGo.transform.localScale = Vector3.one * 2.0f;
             glow = glowGo.AddComponent<SpriteRenderer>();
             glow.sprite = GameBootstrap.MakeRadialSprite();
             glow.color = new Color(1f, 0.95f, 0.7f, 0f);
@@ -171,6 +172,9 @@ namespace CardFactory.Gameplay
             if (offer != null)
             {
                 offerRoot = offer;
+                // Eski Billboard'ı kaldır → rotasyon Inspector'da verildiği gibi kalsın (Play'de kaymaz).
+                var bb = offer.GetComponent<CardFactory.Feedback.Billboard>();
+                if (bb != null) Destroy(bb);
                 var glowT = offer.Find("DockGlow");
                 glow = glowT != null ? glowT.GetComponent<SpriteRenderer>() : null;
                 var panelT = offer.Find("OfferPanel");
@@ -199,7 +203,7 @@ namespace CardFactory.Gameplay
             {
                 glow.enabled = true;
                 glow.color = new Color(1f, 0.95f, 0.7f, 1f);
-                glow.transform.localScale = Vector3.one * 4.0f;   // panel önünde belirgin kalsın
+                glow.transform.localScale = Vector3.one * 2.0f;   // yerel, dar hale
             }
         }
 
@@ -220,7 +224,7 @@ namespace CardFactory.Gameplay
             {
                 glow.enabled = false;
                 glow.color = new Color(1f, 0.95f, 0.7f, 0f);
-                glow.transform.localScale = Vector3.one * 2.6f;
+                glow.transform.localScale = Vector3.one * 2.0f;
             }
         }
 
