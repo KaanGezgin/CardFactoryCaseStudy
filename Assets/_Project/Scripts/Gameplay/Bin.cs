@@ -30,6 +30,10 @@ namespace CardFactory.Gameplay
         Material emptyMat;
         Material fillMat;
 
+        Transform marker;          // üstte zıplayan hedef-renk baloncuğu
+        Renderer markerRend;
+        Vector3 markerBase;
+
         const float BodyHeight = 1.3f;
         const float SlotFrontZ = -0.30f;
         const float LeanBack = 22f;     // geriye yatma açısı (derece)
@@ -51,6 +55,17 @@ namespace CardFactory.Gameplay
             bodyGo.transform.localScale = new Vector3(1.05f, BodyHeight + 0.08f, 0.55f);
             bodyGo.GetComponent<Renderer>().sharedMaterial =
                 GameBootstrap.NewLitMaterial(new Color(0.12f, 0.13f, 0.15f));
+
+            // Hedef-renk işaretçisi (kutunun üstünde zıplayan baloncuk).
+            var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            markerGo.name = "BinMarker";
+            DestroyCollider(markerGo);
+            markerGo.transform.SetParent(transform, false);
+            markerBase = new Vector3(0f, BodyHeight + 0.5f, 0f);
+            markerGo.transform.localPosition = markerBase;
+            markerGo.transform.localScale = Vector3.one * 0.34f;
+            markerRend = markerGo.GetComponent<Renderer>();
+            marker = markerGo.transform;
         }
 
         static void DestroyCollider(GameObject go)
@@ -71,6 +86,7 @@ namespace CardFactory.Gameplay
             var full = CardPalette.Get(color);
             fillMat = GameBootstrap.NewLitMaterial(full);
             emptyMat = GameBootstrap.NewLitMaterial(full * 0.45f);  // koyu ton
+            if (markerRend != null) markerRend.sharedMaterial = GameBootstrap.NewLitMaterial(full);
 
             BuildSlots(capacity);
 
@@ -83,6 +99,12 @@ namespace CardFactory.Gameplay
         {
             Active = false;
             gameObject.SetActive(false);
+        }
+
+        void Update()
+        {
+            if (marker != null && Active)
+                marker.localPosition = markerBase + Vector3.up * (Mathf.Sin(Time.time * 4f) * 0.1f + 0.1f);
         }
 
         void BuildSlots(int capacity)

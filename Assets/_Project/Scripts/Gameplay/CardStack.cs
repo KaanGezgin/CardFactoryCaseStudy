@@ -30,6 +30,7 @@ namespace CardFactory.Gameplay
         const float BaseY = 0.14f;
 
         public bool IsEmpty => cards.Count == 0;
+        public CardColor? TopColor => cards.Count == 0 ? (CardColor?)null : cards[cards.Count - 1];
 
         public void Init(List<CardColor> colors, Vector3 basePos, Conveyor conv)
         {

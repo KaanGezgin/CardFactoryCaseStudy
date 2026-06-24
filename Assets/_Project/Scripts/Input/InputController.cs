@@ -13,6 +13,9 @@ namespace CardFactory.InputSys
         Camera cam;
         GameManager gm;
 
+        /// <summary>Bir desteye dokunulduğunda tetiklenir (ghost pointer bunu dinler).</summary>
+        public event System.Action OnTap;
+
         public void Init(Camera camera, GameManager gameManager)
         {
             cam = camera;
@@ -48,7 +51,11 @@ namespace CardFactory.InputSys
             if (Physics.Raycast(ray, out var hit, 200f))
             {
                 var stack = hit.collider.GetComponentInParent<CardStack>();
-                if (stack != null) stack.OnTapped();
+                if (stack != null)
+                {
+                    stack.OnTapped();
+                    OnTap?.Invoke();
+                }
             }
         }
     }

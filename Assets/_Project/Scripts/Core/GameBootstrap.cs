@@ -100,6 +100,19 @@ namespace CardFactory.Core
             input.transform.SetParent(root.transform, false);
             input.Init(Camera.main, gm);
 
+            // Ghost el-pointer: ilk güvenli hamleyi (aktif renk tepedeki desteyi) gösterir
+            var firstColor = level.binColorOrder.Count > 0 ? level.binColorOrder[0] : (CardColor?)null;
+            CardStack target = null;
+            foreach (var s in stacks)
+                if (firstColor.HasValue && s.TopColor == firstColor.Value) { target = s; break; }
+            if (target == null && stacks.Count > 0) target = stacks[0];
+            if (target != null)
+            {
+                var hp = new GameObject("HandPointer").AddComponent<HandPointer>();
+                hp.transform.SetParent(root.transform, false);
+                hp.Init(target.transform.position, input);
+            }
+
             // HUD — kazan/kaybet paneli + butonlar (sayaç ve dock teklifi artık 3B/gömülü)
             var hud = new GameObject("HudController").AddComponent<HudController>();
             hud.transform.SetParent(root.transform, false);

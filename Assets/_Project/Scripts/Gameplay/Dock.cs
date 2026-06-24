@@ -28,6 +28,9 @@ namespace CardFactory.Gameplay
         SpriteRenderer glow;
         bool failShown;
 
+        Renderer trayRend;          // tansiyon nabzı için
+        static readonly Color TrayBase = new Color(0.88f, 0.90f, 0.93f);
+
         static readonly Color OfferGreen = new Color(0.10f, 0.42f, 0.18f);   // koyu yeşil
 
         const float Spacing = 0.42f;
@@ -53,8 +56,8 @@ namespace CardFactory.Gameplay
             tray.transform.SetParent(transform, false);
             tray.transform.position = new Vector3(0f, -0.02f, centerZ);
             tray.transform.localScale = new Vector3(width + 0.7f, 0.14f, 0.75f);
-            tray.GetComponent<Renderer>().sharedMaterial =
-                GameBootstrap.NewLitMaterial(new Color(0.88f, 0.90f, 0.93f));
+            trayRend = tray.GetComponent<Renderer>();
+            trayRend.sharedMaterial = GameBootstrap.NewLitMaterial(TrayBase);
 
             // Boş slot işaretçileri
             var slotMat = GameBootstrap.NewLitMaterial(new Color(0.30f, 0.33f, 0.38f));
@@ -159,6 +162,28 @@ namespace CardFactory.Gameplay
                 glow.enabled = true;
                 glow.color = new Color(1f, 0.95f, 0.7f, 0.95f);
             }
+        }
+
+        // Tansiyon nabzı: dock doldukça tepsi kırmızıya doğru, hızlanan bir nabızla yanar.
+        void Update()
+        {
+            if (trayRend == null) return;
+            float ratio = Capacity > 0 ? (float)Count / Capacity : 0f;
+            if (ratio < 0.5f)
+            {
+                SetTray(TrayBase);
+                return;
+            }
+            float intensity = Mathf.InverseLerp(0.5f, 1f, ratio);
+            float speed = Mathf.Lerp(3f, 11f, ratio);
+            float k = (Mathf.Sin(Time.time * speed) * 0.5f + 0.5f) * intensity;
+            SetTray(Color.Lerp(TrayBase, new Color(0.95f, 0.18f, 0.18f), k));
+        }
+
+        void SetTray(Color c)
+        {
+            trayRend.sharedMaterial.color = c;
+            trayRend.sharedMaterial.SetColor("_BaseColor", c);
         }
 
         public void Receive(Card card)
