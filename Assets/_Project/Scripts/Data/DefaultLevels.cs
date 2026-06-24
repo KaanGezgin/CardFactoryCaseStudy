@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace CardFactory.Data
 {
@@ -19,8 +20,8 @@ namespace CardFactory.Data
         const int Colors = 4;
         const int Stacks = 4;
         const int MaxRun = 5;       // bir renkten art arda en fazla 5 kart
-        const int MinHeight = 11;   // sütun yüksekliği alt sınır
-        const int MaxHeight = 14;   // sütun yüksekliği üst sınır
+        const int MinHeight = 20;   // sütun yüksekliği (4×20 = 80 kart)
+        const int MaxHeight = 20;
 
         public static int Count => 2;
 
@@ -86,7 +87,9 @@ namespace CardFactory.Data
         {
             var pal = new List<CardColor>(palette);
             Shuffle(pal, rng);
-            int subset = rng.Next(3, Colors + 1);          // 3 veya 4 renk
+            int minColors = Mathf.CeilToInt((float)height / MaxRun);
+            int subset = rng.Next(minColors, Colors + 1);
+            subset = Mathf.Clamp(subset, minColors, Colors);
             var chosen = pal.GetRange(0, subset);
 
             var counts = new Dictionary<CardColor, int>();

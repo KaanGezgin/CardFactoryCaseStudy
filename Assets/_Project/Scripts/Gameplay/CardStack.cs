@@ -20,13 +20,13 @@ namespace CardFactory.Gameplay
         Conveyor conveyor;
         BoxCollider tapCollider;
 
-        const int MaxVisible = 12;
+        const int MaxVisible = 20;
         const float CardW = 0.85f;
         const float CardThick = 0.07f;
         const float CardLen = 0.95f;
         const float TiltX = -20f;     // neredeyse yere yatık (kuş bakışı)
-        const float StepY = 0.05f;    // çok az yukarı
-        const float StepZ = 0.17f;    // geriye doğru dizilir
+        const float StepY = 0.032f;   // 20 kart sığsın diye sıkı
+        const float StepZ = 0.11f;    // geriye doğru dizilir
         const float BaseY = 0.14f;
 
         public bool IsEmpty => cards.Count == 0;

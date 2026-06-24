@@ -271,7 +271,6 @@ namespace CardFactory.Core
             input.transform.SetParent(levelRoot.transform, false);
             input.Init(Camera.main, gm);
 
-            // Ghost el-pointer (reklam için saklı; şimdilik kapalı)
             if (config.showHandPointer)
             {
                 var firstColor = level.binColorOrder.Count > 0 ? level.binColorOrder[0] : (CardColor?)null;
@@ -286,8 +285,6 @@ namespace CardFactory.Core
                     hp.Init(target.transform.position, input);
                 }
             }
-
-            // (HUD kalıcı dünyada; durumu GameManager.Instance'tan okur.)
 
             Debug.Log($"[GameBootstrap] Level {levelIndex + 1} içeriği kuruldu (kart {level.TotalCards}).");
         }

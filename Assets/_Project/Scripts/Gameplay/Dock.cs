@@ -339,7 +339,8 @@ namespace CardFactory.Gameplay
             ResolveGlowRef();
             CaptureGlowBaseline();
             if (glowBaseAlpha < 0.75f) glowBaseAlpha = GlowAlphaOnFail;
-            SetGlowVisible(true);
+            // 3B sprite yerine HudController.FailOfferGlow (UI, karartmanın üstünde).
+            SetGlowVisible(false);
         }
 
         public void Bind(GameManager gameManager) => gm = gameManager;

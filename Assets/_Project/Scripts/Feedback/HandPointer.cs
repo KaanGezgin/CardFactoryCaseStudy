@@ -49,17 +49,14 @@ namespace CardFactory.Feedback
             handRoot.localPosition = handBase;
             handRoot.localRotation = Quaternion.Euler(48f, -18f, 8f);
 
-            // Avuç — yassı yuvarlak kutu.
             var palm = ProcMesh.RoundedCube("Palm");
             SetupPart(palm, handRoot, new Vector3(0f, 0f, 0.06f),
                 new Vector3(0.46f, 0.14f, 0.52f), Quaternion.identity);
 
-            // Başparmak tümseği.
             var thumb = ProcMesh.RoundedCube("Thumb");
             SetupPart(thumb, handRoot, new Vector3(-0.28f, 0.02f, 0.12f),
                 new Vector3(0.14f, 0.12f, 0.22f), Quaternion.Euler(0f, 25f, -28f));
 
-            // İşaret parmağı — 3 segment (hyper-casual cartoon el).
             var seg1 = ProcMesh.RoundedCube("FingerSeg1");
             SetupPart(seg1, handRoot, new Vector3(0.06f, -0.02f, -0.22f),
                 new Vector3(0.13f, 0.13f, 0.24f), Quaternion.Euler(12f, 0f, 0f));
@@ -73,7 +70,6 @@ namespace CardFactory.Feedback
                 new Vector3(0.10f, 0.10f, 0.18f), Quaternion.Euler(22f, 0f, 0f));
             fingerTip = tip.transform;
 
-            // Diğer parmak tümseği (arka planda siluet).
             var knuckles = ProcMesh.RoundedCube("Knuckles");
             SetupPart(knuckles, handRoot, new Vector3(0.02f, 0.04f, -0.08f),
                 new Vector3(0.38f, 0.10f, 0.18f), Quaternion.Euler(-8f, 0f, 0f));
@@ -117,12 +113,11 @@ namespace CardFactory.Feedback
         void Update()
         {
             t += Time.deltaTime;
-            float phase = Mathf.Sin(t * 3.4f) * 0.5f + 0.5f;          // 0..1 dokunma döngüsü
-            float tap = Mathf.SmoothStep(0f, 1f, phase);               // yumuşak iniş
+            float phase = Mathf.Sin(t * 3.4f) * 0.5f + 0.5f;
+            float tap = Mathf.SmoothStep(0f, 1f, phase);
 
             if (handRoot != null)
             {
-                // El aşağı iner + hafif eğim değişir (dokunma hissi).
                 handRoot.localPosition = handBase - Vector3.up * (tap * 0.62f);
                 handRoot.localRotation = Quaternion.Euler(48f + tap * 6f, -18f, 8f - tap * 4f);
             }
@@ -133,7 +128,6 @@ namespace CardFactory.Feedback
                 fingerTip.localScale = new Vector3(0.10f * (1f + tap * 0.08f), 0.10f * squash, 0.18f * squash);
             }
 
-            // İki halka faz kaymalı genişler — referans reklamlardaki tap pulse.
             AnimateRipple(rippleA, t, 0f);
             AnimateRipple(rippleB, t, 0.55f);
         }

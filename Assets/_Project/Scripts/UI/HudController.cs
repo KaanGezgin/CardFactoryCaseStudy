@@ -25,6 +25,11 @@ namespace CardFactory.UI
         GameObject nextButton;
         GameObject closeButton;
 
+        GameObject failGlowGo;
+        RectTransform failGlowRt;
+        Image failGlowImg;
+        float failGlowPulse;
+
         // --- Kurulum (bake / taze) ---
 
         public void Init()
@@ -60,6 +65,19 @@ namespace CardFactory.UI
                     WireButton(closeButton, () => GameManager.Instance?.Restart());
                     panel.SetActive(false);
                 }
+
+                var glowT = canvas.Find("FailOfferGlow");
+                if (glowT != null)
+                {
+                    failGlowGo = glowT.gameObject;
+                    failGlowRt = glowT.GetComponent<RectTransform>();
+                    failGlowImg = glowT.GetComponent<Image>();
+                    failGlowGo.SetActive(false);
+                }
+                else if (panel != null)
+                {
+                    BuildFailOfferGlow(canvas);
+                }
             }
 
             EnsureEventSystem();
@@ -88,6 +106,7 @@ namespace CardFactory.UI
             canvasGo.AddComponent<GraphicRaycaster>();
 
             BuildPanel(canvasGo.transform);
+            BuildFailOfferGlow(canvasGo.transform);
         }
 
         void BuildPanel(Transform root)
@@ -116,6 +135,83 @@ namespace CardFactory.UI
             closeButton = MakeCloseButton(panel.transform, () => GameManager.Instance?.Restart());
 
             panel.SetActive(false);
+        }
+
+        /// <summary>
+        /// Fail ekranı karartmasının ÜSTÜNDE çizilen boş çember (3B ışık değil).
+        /// EndPanel ile kardeş; yanıp sönerek dock teklifini işaret eder.
+        /// </summary>
+        void BuildFailOfferGlow(Transform canvasRoot)
+        {
+            failGlowGo = new GameObject("FailOfferGlow");
+            failGlowGo.transform.SetParent(canvasRoot, false);
+            failGlowRt = failGlowGo.AddComponent<RectTransform>();
+            failGlowRt.anchorMin = failGlowRt.anchorMax = new Vector2(0.5f, 0.5f);
+            failGlowRt.pivot = new Vector2(0.5f, 0.5f);
+            failGlowRt.sizeDelta = new Vector2(440, 440);
+
+            failGlowImg = failGlowGo.AddComponent<Image>();
+            failGlowImg.raycastTarget = false;
+            failGlowImg.sprite = MakeRingSprite();
+            failGlowImg.color = new Color(1f, 0.92f, 0.35f, 0.9f);
+            failGlowGo.SetActive(false);
+        }
+
+        /// <summary>İçi boş halka — merkez şeffaf, kenar parlak.</summary>
+        static Sprite MakeRingSprite(int size = 256, float inner = 0.58f, float outer = 0.78f)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+                { wrapMode = TextureWrapMode.Clamp };
+            float c = (size - 1) * 0.5f;
+            float mid = (inner + outer) * 0.5f;
+            float half = (outer - inner) * 0.5f + 0.04f;
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
+                    float a = 1f - Mathf.Abs(d - mid) / half;
+                    a = Mathf.Clamp01(a);
+                    a *= a;
+                    px[y * size + x] = new Color(1f, 1f, 1f, a);
+                }
+            tex.SetPixels32(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        void UpdateFailOfferGlow(bool show)
+        {
+            if (failGlowGo == null) return;
+            if (!show)
+            {
+                failGlowGo.SetActive(false);
+                return;
+            }
+
+            if (dock == null) dock = Object.FindFirstObjectByType<Dock>();
+            var cam = Camera.main;
+            if (dock == null || cam == null)
+            {
+                failGlowGo.SetActive(false);
+                return;
+            }
+
+            Vector3 screen = cam.WorldToScreenPoint(dock.OfferWorldPos);
+            if (screen.z < 0f)
+            {
+                failGlowGo.SetActive(false);
+                return;
+            }
+
+            failGlowRt.position = screen;
+            failGlowPulse += Time.deltaTime;
+            float blink = Mathf.Sin(failGlowPulse * 3.4f) * 0.5f + 0.5f;
+            float alpha = Mathf.Lerp(0.18f, 0.95f, blink);
+            float scale = Mathf.Lerp(0.88f, 1.12f, blink);
+            failGlowRt.localScale = Vector3.one * scale;
+            failGlowImg.color = new Color(1f, 0.92f, 0.35f, alpha);
+            failGlowGo.SetActive(true);
         }
 
         void WireButton(GameObject go, UnityAction action)
@@ -230,11 +326,12 @@ namespace CardFactory.UI
         void Update()
         {
             var gm = GameManager.Instance;
-            if (gm == null || panel == null) return;
+            if (gm == null) return;
 
             bool ended = gm.State == GameState.Won || gm.State == GameState.Lost;
-            if (panel.activeSelf != ended) panel.SetActive(ended);
-            if (!ended) return;
+            if (panel != null && panel.activeSelf != ended) panel.SetActive(ended);
+            UpdateFailOfferGlow(ended && gm.State == GameState.Lost);
+            if (!ended || panel == null) return;
 
             bool won = gm.State == GameState.Won;
             if (bannerText != null) bannerText.text = won ? "LEVEL COMPLETE" : "LEVEL FAILED";
