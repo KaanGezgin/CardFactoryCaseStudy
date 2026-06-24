@@ -193,8 +193,6 @@ namespace CardFactory.Gameplay
 
             if (offerLabel != null) offerLabel.text = "New Dock";
             if (offerAmount != null) offerAmount.text = "1000";
-            if (offerPanel != null)
-                offerPanel.sharedMaterial = GameBootstrap.NewLitMaterial(OfferGreen);
             if (offerRoot != null) Juice.PunchScale(offerRoot, Vector3.one, 0.25f, 0.3f);
 
             if (glow != null)
@@ -213,10 +211,11 @@ namespace CardFactory.Gameplay
         {
             Count = 0;
             failShown = false;
-            if (trayRend != null) SetTray(TrayBase);
+            // Görünüşü (offer rengi, tray rengi) RUNTIME'DA ezme → Inspector ayarların kalsın.
+            // Tray sadece tansiyon nabzı açıkken sıfırlanır (reklam modu).
+            if (tensionEnabled && trayRend != null) SetTray(TrayBase);
             if (offerLabel != null) offerLabel.text = "+4 slots";
             if (offerAmount != null) offerAmount.text = "400";
-            if (offerPanel != null) offerPanel.sharedMaterial = GameBootstrap.NewLitMaterial(OfferGreen);
             if (glow != null)
             {
                 glow.enabled = false;

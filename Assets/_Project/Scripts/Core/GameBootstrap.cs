@@ -34,6 +34,8 @@ namespace CardFactory.Core
         static FactoryGate gate;
         static BeltPath path;
         static HudController hud;
+        static Transform[] stackAnchors;   // kartların (destelerin) yaratılacağı yerler
+        static Transform[] binAnchors;     // ortadaki kutuların yaratılacağı yerler
 
         static readonly Vector3[] BinSlots =
         {
@@ -69,31 +71,26 @@ namespace CardFactory.Core
         static void BuildWorld()
         {
             var existing = GameObject.Find("CardFactoryWorld");
-            if (existing != null && IsWorldComplete(existing))
+            if (existing != null)
             {
-                ReuseWorld(existing);
-                Debug.Log("[GameBootstrap] Mevcut dünya yeniden kullanıldı (yeniden yaratılmadı).");
-                return;
+                var marker = existing.GetComponent<WorldPersistence>();
+                if (marker == null || !marker.rebuildOnPlay)
+                {
+                    ReuseWorld(existing);   // mevcut sahne objeleri korunur (yeniden yaratılmaz)
+                    Debug.Log("[GameBootstrap] Mevcut dünya korundu (yeniden yaratılmadı).");
+                    return;
+                }
+                Object.DestroyImmediate(existing);  // rebuildOnPlay açık → baştan kur
             }
 
-            if (existing != null) Object.DestroyImmediate(existing); // eksik → baştan kur
             CleanScene();
             BuildWorldObjects();
             Debug.Log("[GameBootstrap] Kalıcı ortam (runtime) kuruldu.");
         }
 
-        static bool IsWorldComplete(GameObject world)
-        {
-            return world.GetComponentInChildren<Dock>(true) != null
-                && world.GetComponentInChildren<FactoryGate>(true) != null
-                && world.GetComponentInChildren<HudController>(true) != null
-                && world.GetComponentInChildren<Camera>(true) != null;
-        }
-
         /// <summary>
-        /// Sahnede zaten var olan (baked) dünyayı yeniden YARATMADAN kullanır:
-        /// referansları yeniden bağlar, yol verisini yeniden hesaplar, fazla
-        /// kamera/listener varsa temizler. Inspector'daki düzenlemeler korunur.
+        /// Sahnede var olan dünyayı yeniden YARATMADAN, GÖRÜNÜŞÜNÜ DEĞİŞTİRMEDEN kullanır:
+        /// sadece referansları yeniden bağlar ve anchor'ları bulur. Inspector düzenlemeleri korunur.
         /// </summary>
         static void ReuseWorld(GameObject world)
         {
@@ -105,12 +102,40 @@ namespace CardFactory.Core
             if (gate != null) gate.Rebind(GameConfig.Default);
             if (hud != null) hud.Rebind();
 
+            stackAnchors = CollectAnchors(world, "StackAnchor_");
+            if (stackAnchors.Length == 0) stackAnchors = BuildStackAnchors(world.transform);
+            binAnchors = CollectAnchors(world, "BinAnchor_");
+            if (binAnchors.Length == 0) binAnchors = BuildBinAnchors(world.transform);
+
             foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
                 if (cam != null && !cam.transform.IsChildOf(world.transform))
                     Object.DestroyImmediate(cam.gameObject);
             foreach (var al in Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
                 if (al != null && !al.transform.IsChildOf(world.transform))
                     Object.DestroyImmediate(al.gameObject);
+        }
+
+        static void ClearAnchorChildren(Transform[] anchors)
+        {
+            if (anchors == null) return;
+            foreach (var a in anchors)
+            {
+                if (a == null) continue;
+                for (int i = a.childCount - 1; i >= 0; i--)
+                    Object.DestroyImmediate(a.GetChild(i).gameObject);
+            }
+        }
+
+        static Transform[] CollectAnchors(GameObject world, string prefix)
+        {
+            var list = new List<Transform>();
+            for (int i = 0; ; i++)
+            {
+                var t = world.transform.Find(prefix + i);
+                if (t == null) break;
+                list.Add(t);
+            }
+            return list.ToArray();
         }
 
         /// <summary>
@@ -141,7 +166,43 @@ namespace CardFactory.Core
             hud = new GameObject("HudController").AddComponent<HudController>();
             hud.transform.SetParent(world.transform, false);
             hud.Init();
+
+            // Kart desteleri ve ortadaki kutular için ANCHOR'lar (boş, taşınabilir).
+            stackAnchors = BuildStackAnchors(world.transform);
+            binAnchors = BuildBinAnchors(world.transform);
+
+            world.AddComponent<WorldPersistence>();
             return world;
+        }
+
+        static Transform[] BuildStackAnchors(Transform parent)
+        {
+            const int n = 4;
+            float width = Mathf.Min(7.6f, (n - 1) * 2.5f);
+            float x0 = -width * 0.5f;
+            float step = width / (n - 1);
+            var arr = new Transform[n];
+            for (int i = 0; i < n; i++)
+            {
+                var go = new GameObject($"StackAnchor_{i}");
+                go.transform.SetParent(parent, false);
+                go.transform.localPosition = new Vector3(x0 + i * step, 0f, StackZ);
+                arr[i] = go.transform;
+            }
+            return arr;
+        }
+
+        static Transform[] BuildBinAnchors(Transform parent)
+        {
+            var arr = new Transform[BinSlots.Length];
+            for (int i = 0; i < BinSlots.Length; i++)
+            {
+                var go = new GameObject($"BinAnchor_{i}");
+                go.transform.SetParent(parent, false);
+                go.transform.localPosition = BinSlots[i];
+                arr[i] = go.transform;
+            }
+            return arr;
         }
 
         /// <summary>
@@ -170,6 +231,10 @@ namespace CardFactory.Core
             if (dock == null || gate == null || path == null) BuildWorld();
             if (levelRoot != null) Object.DestroyImmediate(levelRoot);
 
+            // Eski kart/kutu içeriğini anchor'lardan temizle (anchor'lar kalır).
+            ClearAnchorChildren(stackAnchors);
+            ClearAnchorChildren(binAnchors);
+
             dock.ResetForNewLevel();
             gate.ResetVisual();
 
@@ -186,13 +251,13 @@ namespace CardFactory.Core
 
             var binMgr = new GameObject("BinManager").AddComponent<BinManager>();
             binMgr.transform.SetParent(levelRoot.transform, false);
-            binMgr.Init(config, level, gm, BinSlots, path);
+            binMgr.Init(config, level, gm, binAnchors, path);   // kutular bin anchor'ları altında
 
             var conveyor = new GameObject("Conveyor").AddComponent<Conveyor>();
             conveyor.transform.SetParent(levelRoot.transform, false);
             conveyor.Init(config, gm, binMgr, dock, gate, path);
 
-            var stacks = BuildStacks(levelRoot.transform, level, conveyor);
+            var stacks = BuildStacks(level, conveyor);   // kartlar stack anchor'ları altında
             gm.SetSystems(stacks, conveyor);
 
             var input = new GameObject("InputController").AddComponent<InputController>();
@@ -360,23 +425,20 @@ namespace CardFactory.Core
             go.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.55f, 0.57f, 0.60f));
         }
 
-        static List<CardStack> BuildStacks(Transform parent, LevelData level, Conveyor conveyor)
+        // Desteleri (kartlar) stack anchor'larının ALTINA kurar; anchor konumu kullanılır.
+        static List<CardStack> BuildStacks(LevelData level, Conveyor conveyor)
         {
             var result = new List<CardStack>();
-            int n = level.stacks.Count;
-            if (n == 0) return result;
-
-            float width = Mathf.Min(7.6f, (n - 1) * 2.5f);
-            float x0 = -width * 0.5f;
-            float step = n > 1 ? width / (n - 1) : 0f;
+            if (stackAnchors == null) return result;
+            int n = Mathf.Min(level.stacks.Count, stackAnchors.Length);
 
             for (int i = 0; i < n; i++)
             {
+                var anchor = stackAnchors[i];
                 var go = new GameObject($"Stack_{i}");
-                go.transform.SetParent(parent, false);
+                go.transform.SetParent(anchor, false);
                 var stack = go.AddComponent<CardStack>();
-                float x = n > 1 ? x0 + i * step : 0f;
-                stack.Init(level.stacks[i], new Vector3(x, 0f, StackZ), conveyor);
+                stack.Init(level.stacks[i], anchor.position, conveyor);
                 result.Add(stack);
             }
             return result;

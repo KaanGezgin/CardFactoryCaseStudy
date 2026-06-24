@@ -6,9 +6,10 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Aktif kutuları (default 2) tutar. Her renk binColorOrder sırasıyla
-    /// dağıtılır; bir slot, rengi tükenene kadar AYNI rengi yeniler. Yeni renk
-    /// seçerken diğer slottaki renk seçilmez → aktif 2 kutu HEP farklı renktir.
+    /// Aktif kutuları (default 2) tutar; her renk binColorOrder sırasıyla dağıtılır,
+    /// aktif 2 kutu hep farklı renk olur. Kutular bin ANCHOR'larının altına kurulur
+    /// (anchor'lar kalıcı/taşınabilir; kutular her oyunda dinamik). Her kutunun
+    /// kapasitesi o renkten KALAN kart kadardır → son kutu da tam dolar.
     /// </summary>
     public class BinManager : MonoBehaviour
     {
@@ -17,21 +18,23 @@ namespace CardFactory.Gameplay
         int cap;
 
         List<CardColor> order;
-        readonly Dictionary<CardColor, int> needed = new();   // renk başına gereken kutu
-        readonly Dictionary<CardColor, int> shipped = new();  // sevk edilen kutu
-        readonly Dictionary<CardColor, int> total = new();    // renk başına toplam kart
-        readonly Dictionary<CardColor, int> captured = new(); // kutulara inen kart
+        readonly Dictionary<CardColor, int> needed = new();      // renk başına gereken kutu
+        readonly Dictionary<CardColor, int> shipped = new();     // sevk edilen kutu
+        readonly Dictionary<CardColor, int> total = new();       // renk başına toplam kart
+        readonly Dictionary<CardColor, int> captured = new();    // kutulara inen kart
+        readonly Dictionary<CardColor, int> deployedCap = new(); // o renge dağıtılan toplam kapasite
+
+        const float CaptureWindow = 1.5f;   // kutuyu bu kadar geçen kart artık geri dönmez
 
         public Bin[] Slots { get; private set; }
 
         public void Init(GameConfig config, LevelData level, GameManager gameManager,
-                         Vector3[] slotPositions, BeltPath path)
+                         Transform[] binAnchors, BeltPath path)
         {
             cfg = config;
             gm = gameManager;
             cap = level.binCapacity > 0 ? level.binCapacity : cfg.binCapacity;
 
-            // Renk sayıları → renk başına gereken kutu adedi
             var counts = new Dictionary<CardColor, int>();
             foreach (var st in level.stacks)
                 foreach (var c in st)
@@ -52,25 +55,23 @@ namespace CardFactory.Gameplay
                 shipped[kv.Key] = 0;
                 total[kv.Key] = kv.Value;
                 captured[kv.Key] = 0;
+                deployedCap[kv.Key] = 0;
             }
 
-            Slots = new Bin[slotPositions.Length];
-            for (int i = 0; i < slotPositions.Length; i++)
+            Slots = new Bin[binAnchors.Length];
+            for (int i = 0; i < binAnchors.Length; i++)
             {
+                var anchor = binAnchors[i];
                 var go = new GameObject($"Bin_{i}");
-                go.transform.SetParent(transform, false);
+                go.transform.SetParent(anchor, false);
                 var bin = go.AddComponent<Bin>();
-                bin.Init(gm, this, i, slotPositions[i]);
-                bin.TriggerDist = path.NearestDist(slotPositions[i]);
+                bin.Init(gm, this, i, anchor.position);
+                bin.TriggerDist = path.NearestDist(anchor.position);
                 Slots[i] = bin;
             }
 
-            // İlk dağıtım: her slot bir öncekinden farklı renk
             for (int i = 0; i < Slots.Length; i++)
-            {
-                CardColor? avoid = OtherActiveColor(i);
-                AssignSlot(i, avoid);
-            }
+                AssignSlot(i, OtherActiveColor(i));
         }
 
         CardColor? OtherActiveColor(int slot)
@@ -95,20 +96,27 @@ namespace CardFactory.Gameplay
             return null;
         }
 
+        /// <summary>O renge bu kutu için kapasite = kalan kart (max base kapasite).</summary>
+        int CapacityFor(CardColor c)
+        {
+            int remaining = total[c] - deployedCap[c];
+            int thisCap = Mathf.Clamp(remaining, 1, cap);
+            deployedCap[c] += thisCap;
+            return thisCap;
+        }
+
         void AssignSlot(int slot, CardColor? avoid)
         {
             var c = PickColor(avoid);
-            if (c.HasValue) Slots[slot].Configure(c.Value, cap);
+            if (c.HasValue) Slots[slot].Configure(c.Value, CapacityFor(c.Value));
             else Slots[slot].Deactivate();
         }
 
-        /// <summary>Bir kart bir kutuya indiğinde Bin tarafından çağrılır.</summary>
         public void NotifyCaptured(CardColor color)
         {
             if (captured.ContainsKey(color)) captured[color]++;
         }
 
-        /// <summary>O rengin tüm kartları kutulara indi mi (stoklarda/yolda kalmadı)?</summary>
         public bool IsColorExhausted(CardColor color)
         {
             return total.TryGetValue(color, out int t) &&
@@ -122,7 +130,8 @@ namespace CardFactory.Gameplay
             {
                 if (bin == null || !bin.Active) continue;
                 if (bin.Color != color || !bin.HasRoom) continue;
-                if (dist < bin.TriggerDist - 0.4f) continue;
+                if (dist < bin.TriggerDist - 0.4f) continue;          // henüz gelmedi
+                if (dist > bin.TriggerDist + CaptureWindow) continue; // geçti → geri dönmez
                 if (best == null || bin.TriggerDist < best.TriggerDist) best = bin;
             }
             return best;
@@ -135,9 +144,8 @@ namespace CardFactory.Gameplay
 
             CardColor? avoid = OtherActiveColor(slot);
 
-            // Renk tükenmediyse AYNI rengi yenile (diğer slot zaten farklı renk)
             if (shipped[c] < needed[c] && (!avoid.HasValue || c != avoid.Value))
-                Slots[slot].Configure(c, cap);
+                Slots[slot].Configure(c, CapacityFor(c));   // aynı renk, kalan kart kadar
             else
                 AssignSlot(slot, avoid);
         }

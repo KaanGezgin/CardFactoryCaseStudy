@@ -1,5 +1,4 @@
 using CardFactory.Core;
-using CardFactory.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -29,8 +28,8 @@ namespace CardFactory.EditorTools
             if (state != PlayModeStateChange.ExitingEditMode) return;
 
             var existing = GameObject.Find("CardFactoryWorld");
-            // Tam (HUD dahil) bir dünya varsa dokunma (Inspector düzenlemeleri korunur).
-            if (existing != null && existing.GetComponentInChildren<HudController>(true) != null) return;
+            // Güncel yapıda (WorldPersistence marker'lı) bir dünya varsa dokunma.
+            if (existing != null && existing.GetComponent<WorldPersistence>() != null) return;
 
             var world = GameBootstrap.BakeWorld();
             EditorSceneManager.MarkSceneDirty(world.scene);
