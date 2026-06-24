@@ -16,6 +16,8 @@ namespace CardFactory.Gameplay
         public int Count { get; private set; }
 
         public Vector3 SlotsAnchor { get; private set; }
+        public Vector3 OfferWorldPos =>
+            offerRoot != null ? offerRoot.position : transform.position + Vector3.up;
 
         GameManager gm;
         Vector3[] slots;
@@ -118,6 +120,20 @@ namespace CardFactory.Gameplay
         {
             var c = go.GetComponent<Collider>();
             if (c != null) Object.Destroy(c);
+        }
+
+        static TextMesh FindChildTextMesh(Transform root, string childName)
+        {
+            foreach (var tm in root.GetComponentsInChildren<TextMesh>(true))
+                if (tm.gameObject.name == childName) return tm;
+            return null;
+        }
+
+        static Renderer FindChildRenderer(Transform root, string childName)
+        {
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                if (r.gameObject.name == childName) return r;
+            return null;
         }
 
         void BuildOfferWidget(Vector3 pos)
@@ -299,12 +315,9 @@ namespace CardFactory.Gameplay
                 var bb = offer.GetComponent<Billboard>();
                 if (bb != null) Destroy(bb);
                 EnsureGlowHalo(offer, createIfMissing: true);
-                var panelT = offer.Find("OfferPanel");
-                offerPanel = panelT != null ? panelT.GetComponent<Renderer>() : null;
-                var labelT = offer.Find("OfferLabel");
-                offerLabel = labelT != null ? labelT.GetComponent<TextMesh>() : null;
-                var amountT = offer.Find("OfferAmount");
-                offerAmount = amountT != null ? amountT.GetComponent<TextMesh>() : null;
+                offerPanel = FindChildRenderer(offer, "OfferPanel");
+                offerLabel = FindChildTextMesh(offer, "OfferLabel");
+                offerAmount = FindChildTextMesh(offer, "OfferAmount");
             }
 
             // Eski DockGlowFloor artık kullanılmıyor.
