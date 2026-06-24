@@ -69,7 +69,7 @@ namespace CardFactory.UI
             panel = new GameObject("EndPanel");
             panel.transform.SetParent(root, false);
             var img = panel.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0.38f);   // hafif karartma (3B sahne ve spot görünür kalsın)
+            img.color = new Color(0f, 0f, 0f, 0.22f);   // çok hafif karartma (dock spot ışığı görünür kalsın)
             var rt = img.rectTransform;
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;

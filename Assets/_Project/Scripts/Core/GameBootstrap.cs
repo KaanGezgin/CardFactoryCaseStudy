@@ -81,8 +81,8 @@ namespace CardFactory.Core
             binMgr.transform.SetParent(root.transform, false);
             var slotPositions = new[]
             {
-                new Vector3(-0.95f, 0f, -0.2f),
-                new Vector3(0.95f, 0f, -0.2f),
+                new Vector3(-0.95f, 0f, 0.3f),
+                new Vector3(0.95f, 0f, 0.3f),
             };
             binMgr.Init(config, level, gm, slotPositions, path);
 

@@ -36,7 +36,7 @@ namespace CardFactory.Gameplay
 
         const float BodyHeight = 1.3f;
         const float SlotFrontZ = -0.30f;
-        const float LeanBack = 22f;     // geriye yatma açısı (derece)
+        const float LeanBack = 34f;     // geriye yatma açısı (derece) — ağzı yukarı dönük
 
         public void Init(GameManager gameManager, BinManager manager, int slot, Vector3 pos)
         {

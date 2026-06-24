@@ -31,7 +31,7 @@ namespace CardFactory.Gameplay
         Renderer trayRend;          // tansiyon nabzı için
         static readonly Color TrayBase = new Color(0.88f, 0.90f, 0.93f);
 
-        static readonly Color OfferGreen = new Color(0.10f, 0.42f, 0.18f);   // koyu yeşil
+        static readonly Color OfferGreen = new Color(0.05f, 0.24f, 0.10f);   // koyu yeşil (kısıldı)
 
         const float Spacing = 0.42f;
         const float SlotY = 0.05f;
@@ -160,7 +160,8 @@ namespace CardFactory.Gameplay
             if (glow != null)
             {
                 glow.enabled = true;
-                glow.color = new Color(1f, 0.95f, 0.7f, 0.95f);
+                glow.color = new Color(1f, 0.95f, 0.7f, 1f);
+                glow.transform.localScale = Vector3.one * 4.0f;   // panel önünde belirgin kalsın
             }
         }
 
