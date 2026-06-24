@@ -177,6 +177,8 @@ namespace CardFactory.Core
             var level = DefaultLevels.Get(levelIndex);
             levelRoot = new GameObject("CardFactoryLevel");
 
+            dock.SetTension(config.dockTensionPulse);   // reklam için saklı (şimdilik kapalı)
+
             var gm = new GameObject("GameManager").AddComponent<GameManager>();
             gm.transform.SetParent(levelRoot.transform, false);
             gm.Init(config, levelIndex, level);
@@ -197,17 +199,20 @@ namespace CardFactory.Core
             input.transform.SetParent(levelRoot.transform, false);
             input.Init(Camera.main, gm);
 
-            // Ghost el-pointer: ilk güvenli hamleyi (aktif renk tepedeki desteyi) gösterir
-            var firstColor = level.binColorOrder.Count > 0 ? level.binColorOrder[0] : (CardColor?)null;
-            CardStack target = null;
-            foreach (var s in stacks)
-                if (firstColor.HasValue && s.TopColor == firstColor.Value) { target = s; break; }
-            if (target == null && stacks.Count > 0) target = stacks[0];
-            if (target != null)
+            // Ghost el-pointer (reklam için saklı; şimdilik kapalı)
+            if (config.showHandPointer)
             {
-                var hp = new GameObject("HandPointer").AddComponent<HandPointer>();
-                hp.transform.SetParent(levelRoot.transform, false);
-                hp.Init(target.transform.position, input);
+                var firstColor = level.binColorOrder.Count > 0 ? level.binColorOrder[0] : (CardColor?)null;
+                CardStack target = null;
+                foreach (var s in stacks)
+                    if (firstColor.HasValue && s.TopColor == firstColor.Value) { target = s; break; }
+                if (target == null && stacks.Count > 0) target = stacks[0];
+                if (target != null)
+                {
+                    var hp = new GameObject("HandPointer").AddComponent<HandPointer>();
+                    hp.transform.SetParent(levelRoot.transform, false);
+                    hp.Init(target.transform.position, input);
+                }
             }
 
             // (HUD kalıcı dünyada; durumu GameManager.Instance'tan okur.)

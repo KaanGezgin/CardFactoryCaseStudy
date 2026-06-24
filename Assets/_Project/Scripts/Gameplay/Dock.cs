@@ -30,6 +30,7 @@ namespace CardFactory.Gameplay
         bool failShown;
 
         Renderer trayRend;          // tansiyon nabzı için
+        bool tensionEnabled;        // reklam için saklandı; GameConfig.dockTensionPulse
         static readonly Color TrayBase = new Color(0.88f, 0.90f, 0.93f);
 
         static readonly Color OfferGreen = new Color(0.05f, 0.24f, 0.10f);   // koyu yeşil (kısıldı)
@@ -224,10 +225,13 @@ namespace CardFactory.Gameplay
             }
         }
 
+        /// <summary>Tansiyon nabzını aç/kapa (reklam için saklanır).</summary>
+        public void SetTension(bool on) => tensionEnabled = on;
+
         // Tansiyon nabzı: dock doldukça tepsi kırmızıya doğru, hızlanan bir nabızla yanar.
         void Update()
         {
-            if (trayRend == null) return;
+            if (!tensionEnabled || trayRend == null) return;
             float ratio = Capacity > 0 ? (float)Count / Capacity : 0f;
             if (ratio < 0.5f)
             {
