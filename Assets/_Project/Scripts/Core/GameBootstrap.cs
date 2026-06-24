@@ -5,6 +5,8 @@ using CardFactory.Gameplay;
 using CardFactory.InputSys;
 using CardFactory.UI;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace CardFactory.Core
 {
@@ -115,6 +117,8 @@ namespace CardFactory.Core
             foreach (var al in Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
                 if (al != null && !al.transform.IsChildOf(world.transform))
                     Object.DestroyImmediate(al.gameObject);
+
+            ApplyPolish(world);   // cila runtime'da da uygulanır (re-bake gerekmeden)
         }
 
         static void ClearAnchorChildren(Transform[] anchors)
@@ -174,6 +178,7 @@ namespace CardFactory.Core
             binAnchors = BuildBinAnchors(world.transform);
 
             world.AddComponent<WorldPersistence>();
+            ApplyPolish(world);
             return world;
         }
 
@@ -514,6 +519,116 @@ namespace CardFactory.Core
             ground.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.78f, 0.84f, 0.90f));
         }
 
+        /// <summary>
+        /// Görsel cila (idempotent; hem bake hem reuse'da çalışır): ışık ayarı,
+        /// grid zemin, hafif parlaklık, post-processing volume, kamera post-fx.
+        /// </summary>
+        static void ApplyPolish(GameObject world)
+        {
+            // Işık
+            var light = world.GetComponentInChildren<Light>(true);
+            if (light != null)
+            {
+                light.color = new Color(1f, 0.97f, 0.9f);
+                light.intensity = 1.25f;
+                light.shadows = LightShadows.Soft;
+                light.shadowStrength = 0.45f;
+                light.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+            }
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.62f, 0.66f, 0.72f);
+
+            // Grid zemin
+            var ground = world.transform.Find("Ground");
+            if (ground != null)
+            {
+                var r = ground.GetComponent<Renderer>();
+                if (r != null) r.sharedMaterial = GroundMaterial();
+            }
+
+            // Hafif parlaklık — dünyadaki tüm materyaller
+            foreach (var rend in world.GetComponentsInChildren<Renderer>(true))
+            {
+                var m = rend.sharedMaterial;
+                if (m != null && m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.3f);
+            }
+
+            // Post-processing volume (her açılışta taze kur → serialize sorunlarından bağımsız)
+            var oldFx = world.transform.Find("PostFX");
+            if (oldFx != null) Object.DestroyImmediate(oldFx.gameObject);
+            BuildPostFX(world.transform);
+
+            // Kamera post-processing aç
+            var cam = world.GetComponentInChildren<Camera>(true);
+            if (cam != null)
+            {
+                var data = cam.GetUniversalAdditionalCameraData();
+                data.renderPostProcessing = true;
+                data.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+            }
+        }
+
+        static void BuildPostFX(Transform parent)
+        {
+            var go = new GameObject("PostFX");
+            go.transform.SetParent(parent, false);
+            var vol = go.AddComponent<Volume>();
+            vol.isGlobal = true;
+            vol.priority = 1f;
+
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            vol.sharedProfile = profile;
+
+            var bloom = profile.Add<Bloom>();
+            bloom.active = true;
+            bloom.intensity.Override(0.5f);
+            bloom.threshold.Override(0.95f);
+            bloom.scatter.Override(0.6f);
+
+            var vig = profile.Add<Vignette>();
+            vig.active = true;
+            vig.intensity.Override(0.27f);
+            vig.smoothness.Override(0.5f);
+
+            var ca = profile.Add<ColorAdjustments>();
+            ca.active = true;
+            ca.saturation.Override(18f);
+            ca.contrast.Override(8f);
+            ca.postExposure.Override(0.05f);
+
+            var tone = profile.Add<Tonemapping>();
+            tone.active = true;
+            tone.mode.Override(TonemappingMode.Neutral);
+        }
+
+        static Material GroundMaterial()
+        {
+            var mat = NewLitMaterial(new Color(0.85f, 0.90f, 0.96f));
+            var tex = MakeGridTexture();
+            mat.SetTexture("_BaseMap", tex);
+            mat.mainTexture = tex;
+            mat.SetTextureScale("_BaseMap", new Vector2(12f, 12f));
+            mat.mainTextureScale = new Vector2(12f, 12f);
+            mat.SetFloat("_Smoothness", 0.2f);
+            return mat;
+        }
+
+        static Texture2D MakeGridTexture()
+        {
+            const int s = 64;
+            const int lineW = 3;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
+            var baseC = (Color32)new Color(0.86f, 0.91f, 0.97f);
+            var lineC = (Color32)new Color(0.74f, 0.81f, 0.91f);
+            var px = new Color32[s * s];
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                    px[y * s + x] = (x < lineW || y < lineW) ? lineC : baseC;
+            tex.SetPixels32(px);
+            tex.Apply();
+            return tex;
+        }
+
         public static Material NewLitMaterial(Color color)
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit");
@@ -526,6 +641,8 @@ namespace CardFactory.Core
             }
             var mat = new Material(shader) { color = color };
             mat.SetColor("_BaseColor", color);
+            mat.SetFloat("_Smoothness", 0.32f);   // hafif parlaklık (cila)
+            mat.SetFloat("_Metallic", 0f);
             return mat;
         }
     }
