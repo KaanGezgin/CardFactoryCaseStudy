@@ -13,18 +13,21 @@ namespace CardFactory.Feedback
     {
         Transform handRoot;
         Transform fingerTip;
+        Vector3 fingerTipBase;
         Vector3 handBase;
         Material ghostMat;
         Camera cam;
         float clickT;                  // sol tık basış animasyonu (1→0)
 
         const float PlaneY = 0.1f;     // elin süzüldüğü zemin düzlemi
-        // El yönü: parmak AŞAĞI baksın (Inspector yok; buradan ayarlanır).
-        static readonly Vector3 HandEuler = new Vector3(92f, -12f, 6f);
+        // El yönü (Inspector yok; buradan ayarlanır).
+        static readonly Vector3 RootEuler = new Vector3(-44f, -30.05f, 0f);  // kök obje rotasyonu
+        static readonly Vector3 HandEuler = new Vector3(92f, -12f, 6f);      // el modelinin iç açısı
 
         public void Init(Vector3 target, InputController inputController)
         {
             transform.position = target;
+            transform.rotation = Quaternion.Euler(RootEuler);   // FollowCursor sadece konumu sürer
             cam = Camera.main;
             Cursor.visible = false;     // sistem imleci gizli; el onu takip eder
 
@@ -87,10 +90,20 @@ namespace CardFactory.Feedback
             SetupPart(seg2, handRoot, new Vector3(0.06f, -0.06f, -0.44f),
                 new Vector3(0.11f, 0.11f, 0.22f), Quaternion.Euler(18f, 0f, 0f));
 
+            var seg3 = ProcMesh.RoundedCube("FingerSeg3");
+            SetupPart(seg3, handRoot, new Vector3(0.06f, -0.11f, -0.62f),
+                new Vector3(0.105f, 0.105f, 0.22f), Quaternion.Euler(24f, 0f, 0f));
+
             var tip = ProcMesh.RoundedCube("FingerTip");
-            SetupPart(tip, handRoot, new Vector3(0.06f, -0.10f, -0.62f),
-                new Vector3(0.10f, 0.10f, 0.18f), Quaternion.Euler(22f, 0f, 0f));
-            fingerTip = tip.transform;
+            SetupPart(tip, handRoot, new Vector3(0.06f, -0.17f, -0.82f),
+                new Vector3(0.10f, 0.10f, 0.20f), Quaternion.Euler(30f, 0f, 0f));
+
+            // Yuvarlak parmak ucu (tırnak yumrusu).
+            var nub = ProcMesh.RoundedCube("FingerNub");
+            SetupPart(nub, handRoot, new Vector3(0.06f, -0.235f, -0.98f),
+                new Vector3(0.092f, 0.092f, 0.12f), Quaternion.Euler(36f, 0f, 0f));
+            fingerTip = nub.transform;
+            fingerTipBase = nub.transform.localScale;
 
             var knuckles = ProcMesh.RoundedCube("Knuckles");
             SetupPart(knuckles, handRoot, new Vector3(0.02f, 0.04f, -0.08f),
@@ -128,7 +141,8 @@ namespace CardFactory.Feedback
             if (fingerTip != null)
             {
                 float squash = 1f - press * 0.12f;
-                fingerTip.localScale = new Vector3(0.10f * (1f + press * 0.08f), 0.10f * squash, 0.18f * squash);
+                fingerTip.localScale = Vector3.Scale(fingerTipBase,
+                    new Vector3(1f + press * 0.08f, squash, squash));
             }
         }
     }
