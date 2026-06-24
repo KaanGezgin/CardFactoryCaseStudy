@@ -1,58 +1,84 @@
 using CardFactory.Core;
 using CardFactory.Gameplay;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace CardFactory.UI
 {
     /// <summary>
-    /// uGUI HUD (koddan). Sayaç ve dock teklifi 3B/objelere gömülü olduğundan burada
-    /// yalnızca kazan/kaybet paneli yönetilir: beyaz+renkli iki katmanlı banner,
-    /// kazanmada NEXT, kaybetmede sağda X (kapat=yeniden başlat). Kaybetme anında
-    /// dock teklifini ve spot ışığını tetikler.
+    /// Kazan/kaybet paneli (LEVEL COMPLETE / FAILED). Artık KALICI dünyanın
+    /// parçası: bir kez kurulur, sahnede kalır. Durumu GameManager.Instance'tan
+    /// okur (per-level bağ yok), butonlar Instance üzerinden çalışır. Baked
+    /// sahneden tekrar kullanılınca Rebind ile referanslar/dinleyiciler yenilenir.
     /// </summary>
     public class HudController : MonoBehaviour
     {
-        GameManager gm;
         Dock dock;
-
         Font font;
+        Sprite roundedSprite;
+
         GameObject panel;
-        Image bannerBack;     // beyaz (en arkada)
-        Image bannerFront;    // renkli (kırmızı/yeşil)
+        Image bannerFront;
         Text bannerText;
         GameObject nextButton;
         GameObject closeButton;
 
-        Sprite roundedSprite;
+        // --- Kurulum (bake / taze) ---
 
-        public void Init(GameManager gameManager, Dock dockRef, Transform parent)
+        public void Init()
         {
-            gm = gameManager;
-            dock = dockRef;
-
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             roundedSprite = MakeRoundedSprite(64, 22);
 
-            EnsureEventSystem(parent);
-            BuildCanvas(parent);
+            EnsureEventSystem();
+            BuildCanvas();
+            dock = Object.FindFirstObjectByType<Dock>();
         }
 
-        void EnsureEventSystem(Transform parent)
+        // --- Baked sahneden tekrar kullanım: referansları ve dinleyicileri yenile ---
+
+        public void Rebind()
+        {
+            font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+
+            var canvas = transform.Find("HUDCanvas");
+            if (canvas != null)
+            {
+                var panelT = canvas.Find("EndPanel");
+                if (panelT != null)
+                {
+                    panel = panelT.gameObject;
+                    bannerFront = panelT.Find("BannerFront")?.GetComponent<Image>();
+                    bannerText = panelT.Find("Banner")?.GetComponent<Text>();
+                    nextButton = panelT.Find("NextBtn")?.gameObject;
+                    closeButton = panelT.Find("CloseBtn")?.gameObject;
+                    WireButton(nextButton, () => GameManager.Instance?.NextLevel());
+                    WireButton(closeButton, () => GameManager.Instance?.Restart());
+                    panel.SetActive(false);
+                }
+            }
+
+            EnsureEventSystem();
+            dock = Object.FindFirstObjectByType<Dock>();
+        }
+
+        void EnsureEventSystem()
         {
             if (Object.FindFirstObjectByType<EventSystem>() != null) return;
             var es = new GameObject("EventSystem");
-            es.transform.SetParent(parent, false);
+            es.transform.SetParent(transform, false);
             es.AddComponent<EventSystem>();
             es.AddComponent<StandaloneInputModule>();
         }
 
-        void BuildCanvas(Transform parent)
+        void BuildCanvas()
         {
             var canvasGo = new GameObject("HUDCanvas");
-            canvasGo.transform.SetParent(parent, false);
+            canvasGo.transform.SetParent(transform, false);
             var canvas = canvasGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             var scaler = canvasGo.AddComponent<CanvasScaler>();
@@ -69,15 +95,14 @@ namespace CardFactory.UI
             panel = new GameObject("EndPanel");
             panel.transform.SetParent(root, false);
             var img = panel.AddComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0.22f);   // çok hafif karartma (dock spot ışığı görünür kalsın)
+            img.color = new Color(0f, 0f, 0f, 0.22f);
             var rt = img.rectTransform;
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
 
-            // İki katmanlı banner: en arkada beyaz, üstünde renkli (kırmızı/yeşil).
-            bannerBack = MakePanelImage("BannerBack", panel.transform, Color.white,
+            MakePanelImage("BannerBack", panel.transform, Color.white,
                 new Vector2(880, 360), new Vector2(0, 220));
             bannerFront = MakePanelImage("BannerFront", panel.transform,
                 new Color(0.93f, 0.27f, 0.30f), new Vector2(820, 300), new Vector2(0, 220));
@@ -87,14 +112,21 @@ namespace CardFactory.UI
             bannerText.color = Color.white;
 
             nextButton = MakeButton("NextBtn", panel.transform, "NEXT LEVEL", new Vector2(0, -260),
-                () => gm.NextLevel());
-
-            closeButton = MakeCloseButton(panel.transform, () => gm.Restart());
+                () => GameManager.Instance?.NextLevel());
+            closeButton = MakeCloseButton(panel.transform, () => GameManager.Instance?.Restart());
 
             panel.SetActive(false);
         }
 
-        // Runtime'da yuvarlak köşeli (9-slice) beyaz sprite üretir. Builtin kaynak yok.
+        void WireButton(GameObject go, UnityAction action)
+        {
+            if (go == null) return;
+            var btn = go.GetComponent<Button>();
+            if (btn == null) return;
+            btn.onClick.RemoveAllListeners();
+            btn.onClick.AddListener(action);
+        }
+
         static Sprite MakeRoundedSprite(int size, int radius)
         {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
@@ -103,7 +135,6 @@ namespace CardFactory.UI
                 for (int x = 0; x < size; x++)
                 {
                     float a = 1f;
-                    // En yakın köşe merkezine uzaklığa göre kenarları yuvarla (AA'lı).
                     float cx = x < radius ? radius : (x > size - 1 - radius ? size - 1 - radius : x);
                     float cy = y < radius ? radius : (y > size - 1 - radius ? size - 1 - radius : y);
                     float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
@@ -123,11 +154,7 @@ namespace CardFactory.UI
             go.transform.SetParent(parent, false);
             var img = go.AddComponent<Image>();
             img.color = color;
-            if (roundedSprite != null)
-            {
-                img.sprite = roundedSprite;
-                img.type = Image.Type.Sliced;
-            }
+            if (roundedSprite != null) { img.sprite = roundedSprite; img.type = Image.Type.Sliced; }
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = pos;
@@ -158,21 +185,15 @@ namespace CardFactory.UI
         }
 
         GameObject MakeButton(string name, Transform parent, string label, Vector2 anchoredPos,
-                              UnityEngine.Events.UnityAction onClick)
+                              UnityAction onClick)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
             var img = go.AddComponent<Image>();
             img.color = new Color(0.20f, 0.55f, 0.95f);
-            if (roundedSprite != null)
-            {
-                img.sprite = roundedSprite;
-                img.type = Image.Type.Sliced;
-            }
+            if (roundedSprite != null) { img.sprite = roundedSprite; img.type = Image.Type.Sliced; }
             var rt = img.rectTransform;
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = anchoredPos;
             rt.sizeDelta = new Vector2(520, 150);
 
@@ -184,18 +205,13 @@ namespace CardFactory.UI
             return go;
         }
 
-        // Sol tarafta kırmızı, X sembollü kapat butonu (kaybetme ekranında çıkar).
-        GameObject MakeCloseButton(Transform parent, UnityEngine.Events.UnityAction onClick)
+        GameObject MakeCloseButton(Transform parent, UnityAction onClick)
         {
             var go = new GameObject("CloseBtn");
             go.transform.SetParent(parent, false);
             var img = go.AddComponent<Image>();
             img.color = new Color(0.93f, 0.27f, 0.30f);
-            if (roundedSprite != null)
-            {
-                img.sprite = roundedSprite;
-                img.type = Image.Type.Sliced;
-            }
+            if (roundedSprite != null) { img.sprite = roundedSprite; img.type = Image.Type.Sliced; }
             var rt = img.rectTransform;
             rt.anchorMin = new Vector2(0f, 0.5f);
             rt.anchorMax = new Vector2(0f, 0.5f);
@@ -213,18 +229,20 @@ namespace CardFactory.UI
 
         void Update()
         {
-            if (gm == null) return;
+            var gm = GameManager.Instance;
+            if (gm == null || panel == null) return;
 
             bool ended = gm.State == GameState.Won || gm.State == GameState.Lost;
             if (panel.activeSelf != ended) panel.SetActive(ended);
             if (!ended) return;
 
             bool won = gm.State == GameState.Won;
-            bannerText.text = won ? "LEVEL COMPLETE" : "LEVEL FAILED";
-            bannerFront.color = won ? new Color(0.25f, 0.72f, 0.35f) : new Color(0.93f, 0.27f, 0.30f);
+            if (bannerText != null) bannerText.text = won ? "LEVEL COMPLETE" : "LEVEL FAILED";
+            if (bannerFront != null)
+                bannerFront.color = won ? new Color(0.25f, 0.72f, 0.35f) : new Color(0.93f, 0.27f, 0.30f);
 
-            if (nextButton.activeSelf != won) nextButton.SetActive(won);
-            if (closeButton.activeSelf != !won) closeButton.SetActive(!won);
+            if (nextButton != null && nextButton.activeSelf != won) nextButton.SetActive(won);
+            if (closeButton != null && closeButton.activeSelf != !won) closeButton.SetActive(!won);
 
             if (!won && dock != null) dock.ShowFailOffer();
         }

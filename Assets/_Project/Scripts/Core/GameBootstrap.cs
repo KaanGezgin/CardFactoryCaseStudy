@@ -33,6 +33,7 @@ namespace CardFactory.Core
         static Dock dock;
         static FactoryGate gate;
         static BeltPath path;
+        static HudController hud;
 
         static readonly Vector3[] BinSlots =
         {
@@ -85,6 +86,7 @@ namespace CardFactory.Core
         {
             return world.GetComponentInChildren<Dock>(true) != null
                 && world.GetComponentInChildren<FactoryGate>(true) != null
+                && world.GetComponentInChildren<HudController>(true) != null
                 && world.GetComponentInChildren<Camera>(true) != null;
         }
 
@@ -98,8 +100,10 @@ namespace CardFactory.Core
             path = new BeltPath(BuildUPath());   // yol verisi (serialize edilmez)
             dock = world.GetComponentInChildren<Dock>(true);
             gate = world.GetComponentInChildren<FactoryGate>(true);
+            hud = world.GetComponentInChildren<HudController>(true);
             if (dock != null) dock.Rebind();
             if (gate != null) gate.Rebind(GameConfig.Default);
+            if (hud != null) hud.Rebind();
 
             foreach (var cam in Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
                 if (cam != null && !cam.transform.IsChildOf(world.transform))
@@ -132,6 +136,11 @@ namespace CardFactory.Core
             dock = new GameObject("Dock").AddComponent<Dock>();
             dock.transform.SetParent(world.transform, false);
             dock.Init(config.dockCapacity, DockZ);
+
+            // Kazan/kaybet paneli de KALICI (sahnede kalır).
+            hud = new GameObject("HudController").AddComponent<HudController>();
+            hud.transform.SetParent(world.transform, false);
+            hud.Init();
             return world;
         }
 
@@ -201,10 +210,7 @@ namespace CardFactory.Core
                 hp.Init(target.transform.position, input);
             }
 
-            // HUD — kazan/kaybet paneli
-            var hud = new GameObject("HudController").AddComponent<HudController>();
-            hud.transform.SetParent(levelRoot.transform, false);
-            hud.Init(gm, dock, levelRoot.transform);
+            // (HUD kalıcı dünyada; durumu GameManager.Instance'tan okur.)
 
             Debug.Log($"[GameBootstrap] Level {levelIndex + 1} içeriği kuruldu (kart {level.TotalCards}).");
         }
