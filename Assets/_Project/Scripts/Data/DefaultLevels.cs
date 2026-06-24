@@ -4,32 +4,31 @@ using UnityEngine;
 namespace CardFactory.Data
 {
     /// <summary>
-    /// Level'leri KODDAN ve RASTGELE üretir (asset yok).
+    /// Level'leri KODDAN ve RASTGELE üretir (asset yok). Reklam çekimi için: okunur, kolay,
+    /// kazanılabilir board'lar.
     ///
-    /// KARIŞIK (interleaved) + KAZANILABİLİR-BY-CONSTRUCTION:
-    ///  • binColorOrder rastgele permütasyon → her renge bir "rank" (0=en erken açılan kutu).
-    ///  • Her deste, tepeden-tabana ranklar İÇİN şu invariant'la kurulur:
-    ///        bir karttan YUKARIDAKİ her kartın rank'ı ≤ (o kartın rank'ı + 1).
-    ///    Yani üst bölge rank 0/1, orta 0/1/2 ve 1/2/3, taban 2/3 → komşu renkler GERÇEKTEN
-    ///    iç içe geçer (bantlı değil), ama "en erken renk" daima tepede erişilebilir kalır.
-    ///  • Bir renkten ART ARDA en fazla MaxRun (5) kart.
-    ///  • Her deste farklı kompozisyon + her oyun farklı sıra → asla aynı görünmez.
+    /// KISITLAR:
+    ///  • 4 deste, her biri Height(12) kart. Her renk TOPLAM ColorTotal(12) kart = BinCap(6)'nın
+    ///    katı → kutular DAİMA tam 6 dolar (yarım kutu yok; dock'a kart gitse de kutu mantığı bozulmaz).
+    ///  • Renkler BLOK halinde: aynı renk ART ARDA 3..5 kart (MinRun..MaxRun). Bir destede her renk
+    ///    tek blok → ardışık bloklar farklı renk.
+    ///  • Renk dağılımı "doubly-balanced" matris: her hücre ∈ {0,3,4,5}, satır=kolon=12.
     ///
-    /// Bu invariant, oyunun aktif-2-kutu mantığında SIFIR DOCK ile kazanmayı garanti eder
-    /// (en erken bitmemiş renk hep bir destenin tepesindedir). Güvenlik için üretilen board
-    /// `IsWinnable` ile de doğrulanır; (teorik olarak imkânsız ama) geçmezse garantili
-    /// bantlı üretime (`BuildLayered`) düşülür.
+    /// KAZANILABİLİRLİK: Kutular yalnızca tam 6'da sevk olduğundan dock'a kart göndermek kuyruğu
+    /// bozar → board ZERO-DOCK kazanılabilir olmalı. Önce KARIŞIK blok sırası denenir (`IsWinnable`
+    /// ile doğrulanır); bulunamazsa BANTLI (rank sırası, kesin zero-dock) dizilime düşülür.
     /// </summary>
     public static class DefaultLevels
     {
         const int Colors = 4;
         const int Stacks = 4;
-        const int Height = 20;      // sütun yüksekliği (4×20 = 80 kart)
-        const int MaxRun = 5;       // bir renkten ART ARDA en fazla bu kadar kart
-        const int BinCap = 10;
+        const int Height = 12;        // deste yüksekliği (4×12 = 48 kart)
+        const int MinRun = 3;         // aynı renk ART ARDA en az
+        const int MaxRun = 5;         // aynı renk ART ARDA en fazla
+        const int BinCap = 6;
         const int DockCap = 20;
         const int BeltMax = 20;
-        const int MaxAttempts = 50;
+        const int MaxAttempts = 120;
 
         static readonly CardColor[] Palette =
             { CardColor.Red, CardColor.Green, CardColor.Blue, CardColor.Yellow };
@@ -40,36 +39,86 @@ namespace CardFactory.Data
 
         static LevelData Generate(System.Random rng)
         {
+            // Karışık blok sırası dene → zero-dock kazanılabilirse al.
             for (int attempt = 0; attempt < MaxAttempts; attempt++)
             {
-                var level = BuildInterleaved(rng);
-                if (level != null && IsWinnable(level.stacks, level.binColorOrder))
+                var matrix = BalancedMatrix(rng);
+                var order = ShuffledOrder(rng);
+                var level = BuildFromMatrix(matrix, order, rng, mixed: true);
+                if (IsWinnable(level.stacks, order))
                 {
-                    Debug.Log($"[DefaultLevels] Karışık level üretildi. Kutu sırası: " +
-                              $"{string.Join(" → ", level.binColorOrder)}");
+                    Debug.Log($"[DefaultLevels] Karışık bloklu level. Sıra: {string.Join(" → ", order)}");
                     return level;
                 }
             }
-            Debug.LogWarning("[DefaultLevels] Karışık üretim başarısız; garantili bantlı üretime düşüldü.");
-            return BuildLayered(rng);
+
+            // Garantili: BANTLI dizilim (rank sırası, kesin zero-dock).
+            Debug.LogWarning("[DefaultLevels] Karışık zero-dock bulunamadı; bantlı dizilime düşüldü.");
+            return BuildFromMatrix(BalancedMatrix(rng), ShuffledOrder(rng), rng, mixed: false);
         }
 
-        // ---------------------------------------------------------------------
-        //  KARIŞIK ÜRETİM (kazanılabilir-by-construction)
-        // ---------------------------------------------------------------------
-
-        static LevelData BuildInterleaved(System.Random rng)
+        static List<CardColor> ShuffledOrder(System.Random rng)
         {
             var order = new List<CardColor>(Palette);
             Shuffle(order, rng);
+            return order;
+        }
 
+        // ---------------------------------------------------------------------
+        //  RENK DAĞILIMI: doubly-balanced matris (hücre ∈ {0,3,4,5}, satır=kolon=12)
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// matrix[s][r] = s. destedeki rank-r kart sayısı. Başlangıç: her renk bir desteyi
+        /// ATLAR (permütasyon), diğer 3 destede 4'er → satır=kolon=12, hücreler {0,4}. Sonra
+        /// sum-koruyan 2×2 takaslarla 3/5 çeşitliliği eklenir (hücreler {0,3,4,5}).
+        /// </summary>
+        static int[][] BalancedMatrix(System.Random rng)
+        {
+            var skip = new int[Colors];                 // skip[r] = rank r'nin atladığı deste
+            for (int r = 0; r < Colors; r++) skip[r] = r;
+            Shuffle(skip, rng);                          // permütasyon → her deste tam 1 renk atlar
+
+            var m = new int[Stacks][];
+            for (int s = 0; s < Stacks; s++)
+            {
+                m[s] = new int[Colors];
+                for (int r = 0; r < Colors; r++) m[s][r] = (skip[r] == s) ? 0 : 4;
+            }
+
+            for (int k = 0; k < 24; k++)
+            {
+                int s1 = rng.Next(Stacks), s2 = rng.Next(Stacks);
+                int c1 = rng.Next(Colors), c2 = rng.Next(Colors);
+                if (s1 == s2 || c1 == c2) continue;
+                // Toplamları koru: s1c1--, s1c2++, s2c1++, s2c2--  (hepsi {3,4,5} aralığında kalmalı).
+                if (m[s1][c1] >= 4 && m[s2][c2] >= 4 &&
+                    m[s1][c2] >= 3 && m[s1][c2] <= 4 &&
+                    m[s2][c1] >= 3 && m[s2][c1] <= 4)
+                {
+                    m[s1][c1]--; m[s2][c2]--;
+                    m[s1][c2]++; m[s2][c1]++;
+                }
+            }
+            return m;
+        }
+
+        static LevelData BuildFromMatrix(int[][] matrix, List<CardColor> order, System.Random rng, bool mixed)
+        {
             var stacks = new List<List<CardColor>>(Stacks);
             for (int s = 0; s < Stacks; s++)
             {
-                var targets = RandomComposition(Height, Colors, rng);
-                var topDown = BuildStackInvariant(order, targets, rng);
-                if (topDown == null) return null;
-                topDown.Reverse();                 // LevelData: index 0 = en alt
+                // Bloklar: (rank, boyut) — boyut = hücre değeri (>0).
+                var blocks = new List<int>();            // rank listesi
+                for (int r = 0; r < Colors; r++)
+                    if (matrix[s][r] > 0) blocks.Add(r);
+                if (mixed) Shuffle(blocks, rng);          // karışık sıra; değilse rank-artan (bantlı)
+
+                var topDown = new List<CardColor>(Height);
+                foreach (int r in blocks)
+                    for (int k = 0; k < matrix[s][r]; k++) topDown.Add(order[r]);
+
+                topDown.Reverse();                        // LevelData: index 0 = en alt
                 stacks.Add(topDown);
             }
 
@@ -84,93 +133,13 @@ namespace CardFactory.Data
             };
         }
 
-        /// <summary>
-        /// Bir desteyi TEPEDEN-TABANA, rank invariant'ıyla kurar (kazanılabilir):
-        /// her adımda izinli rank penceresi [maxAbove-1 .. maxAbove+1] → tavan en fazla
-        /// 1 yükselir, böylece üst bölge düşük rank kalır. Hedef kompozisyona (targets)
-        /// göre ağırlıklı, art-arda ≤MaxRun. Döndürülen liste TEPE → TABAN.
-        /// </summary>
-        static List<CardColor> BuildStackInvariant(List<CardColor> order, int[] targets, System.Random rng)
-        {
-            int h = 0;
-            foreach (var t in targets) h += t;
-            var rem = (int[])targets.Clone();
-
-            var result = new List<CardColor>(h);
-            int maxAbove = -1;
-            int lastRank = -1, run = 0;
-
-            for (int pos = 0; pos < h; pos++)
-            {
-                int lo = maxAbove < 0 ? 0 : Mathf.Max(0, maxAbove - 1);
-                int hi = maxAbove < 0 ? Mathf.Min(Colors - 1, 1)
-                                      : Mathf.Min(Colors - 1, maxAbove + 1);
-
-                // Pencere içindeki adayları topla (art-arda limiti dolu rank hariç).
-                int totalW = 0;
-                for (int r = lo; r <= hi; r++)
-                {
-                    if (r == lastRank && run >= MaxRun) continue;
-                    totalW += Weight(rem[r]);
-                }
-
-                int chosen = -1;
-                if (totalW > 0)
-                {
-                    int pick = rng.Next(totalW);
-                    for (int r = lo; r <= hi; r++)
-                    {
-                        if (r == lastRank && run >= MaxRun) continue;
-                        int w = Weight(rem[r]);
-                        if (pick < w) { chosen = r; break; }
-                        pick -= w;
-                    }
-                }
-                else
-                {
-                    // Tüm pencere art-arda bloklu (yalnızca tek renk kaldıysa) → ilk uygun.
-                    for (int r = lo; r <= hi; r++)
-                        if (!(r == lastRank && run >= MaxRun)) { chosen = r; break; }
-                }
-                if (chosen < 0) return null;
-
-                result.Add(order[chosen]);
-                if (rem[chosen] > 0) rem[chosen]--;
-                if (chosen > maxAbove) maxAbove = chosen;
-                if (chosen == lastRank) run++;
-                else { lastRank = chosen; run = 1; }
-            }
-            return result;
-        }
-
-        static int Weight(int remaining) => remaining > 0 ? remaining * 4 : 1;
-
-        /// <summary>20'yi 4 parçaya böler (her parça 2..8 arası), rastgele varyasyonla.</summary>
-        static int[] RandomComposition(int total, int parts, System.Random rng)
-        {
-            var a = new int[parts];
-            int baseV = total / parts;
-            for (int i = 0; i < parts; i++) a[i] = baseV;
-            for (int i = 0; i < total - baseV * parts; i++) a[i % parts]++;
-
-            for (int m = 0; m < 14; m++)
-            {
-                int from = rng.Next(parts), to = rng.Next(parts);
-                if (from != to && a[from] > 2 && a[to] < 8) { a[from]--; a[to]++; }
-            }
-            return a;
-        }
-
         // ---------------------------------------------------------------------
-        //  KAZANILABİLİRLİK SOLVER'I (güvenlik doğrulaması)
+        //  ZERO-DOCK KAZANILABİLİRLİK ÇÖZÜCÜSÜ
         // ---------------------------------------------------------------------
 
         /// <summary>
-        /// Sıfır-dock ile kazanılabilir mi? Aktif kutular = binColorOrder'da bitmemiş
-        /// EN ERKEN 2 renk. Tepesi aktif olan deste güvenle gönderilebilir (aktif renk
-        /// gönderilince tüm kartları kutuya iner, kutu dolunca aynı renge yeni kutu açılır
-        /// → taşma/dock olmaz). Hiçbir tepe aktif değilse ve kart kaldıysa → kazanılamaz.
-        /// (Greedy burada hem sağlam hem eksiksizdir: tepe almak yalnızca alttakileri açar.)
+        /// Hiç dock kullanmadan kazanılabilir mi? Aktif = order'da kart kalan ilk 2 renk.
+        /// Tepesi aktif olan deste gönderilir; hiçbir tepe aktif değilse (kart kaldıysa) → hayır.
         /// </summary>
         static bool IsWinnable(List<List<CardColor>> stacks, List<CardColor> order)
         {
@@ -204,90 +173,21 @@ namespace CardFactory.Data
                 if (activeCount == 0) return true;
 
                 bool moved = false;
-                foreach (var s in st)
+                for (int i = 0; i < st.Count; i++)
                 {
-                    if (s.Count == 0) continue;
-                    var top = s[s.Count - 1];
+                    if (st[i].Count == 0) continue;
+                    var top = st[i][st[i].Count - 1];
                     if (top != a0 && (activeCount < 2 || top != a1)) continue;
 
-                    int g = 0;
-                    while (s.Count > 0 && s[s.Count - 1] == top) { s.RemoveAt(s.Count - 1); g++; }
-                    remaining[top] -= g;
+                    var t = top;
+                    while (st[i].Count > 0 && st[i][st[i].Count - 1] == t)
+                    { st[i].RemoveAt(st[i].Count - 1); remaining[t]--; }
                     moved = true;
                     break;
                 }
                 if (!moved) return false;
             }
             return false;
-        }
-
-        // ---------------------------------------------------------------------
-        //  GARANTİLİ GERİ DÖNÜŞ (eski bantlı üretim)
-        // ---------------------------------------------------------------------
-
-        static LevelData BuildLayered(System.Random rng)
-        {
-            var palette = new List<CardColor>(Palette);
-
-            var perStack = new List<Dictionary<CardColor, int>>();
-            var totals = new Dictionary<CardColor, int>();
-            foreach (var c in palette) totals[c] = 0;
-
-            for (int s = 0; s < Stacks; s++)
-            {
-                var counts = DistributeStack(palette, Height, rng);
-                foreach (var kv in counts) totals[kv.Key] += kv.Value;
-                perStack.Add(counts);
-            }
-
-            var order = new List<CardColor>(palette);
-            Shuffle(order, rng);
-            order.Sort((a, b) => totals[a].CompareTo(totals[b]));
-
-            var stacks = new List<List<CardColor>>();
-            for (int s = 0; s < Stacks; s++)
-            {
-                var st = new List<CardColor>();
-                for (int j = Colors - 1; j >= 0; j--)
-                {
-                    var c = order[j];
-                    if (perStack[s].TryGetValue(c, out int n))
-                        for (int k = 0; k < n; k++) st.Add(c);
-                }
-                stacks.Add(st);
-            }
-
-            return new LevelData
-            {
-                activeBinCount = 2,
-                binCapacity = BinCap,
-                dockCapacity = DockCap,
-                beltMaxCards = BeltMax,
-                binColorOrder = new List<CardColor>(order),
-                stacks = stacks,
-            };
-        }
-
-        static Dictionary<CardColor, int> DistributeStack(List<CardColor> palette, int height, System.Random rng)
-        {
-            var pal = new List<CardColor>(palette);
-            Shuffle(pal, rng);
-            int minColors = Mathf.CeilToInt((float)height / MaxRun);
-            int subset = Mathf.Clamp(rng.Next(minColors, Colors + 1), minColors, Colors);
-            var chosen = pal.GetRange(0, subset);
-
-            var counts = new Dictionary<CardColor, int>();
-            foreach (var c in chosen) counts[c] = 0;
-
-            int remaining = height, guard = 0;
-            while (remaining > 0 && guard++ < 10000)
-            {
-                var c = chosen[rng.Next(chosen.Count)];
-                if (counts[c] >= MaxRun) continue;
-                counts[c]++;
-                remaining--;
-            }
-            return counts;
         }
 
         static void Shuffle<T>(IList<T> list, System.Random rng)

@@ -49,8 +49,8 @@ namespace CardFactory.Gameplay
         const float SlotPocketY = 0.17f;
         const float CardY = 0.30f;
 
-        // Bant kartı (0.6, 0.18, 0.7) → dock'ta dikey durur: Y=uzun kenar, X=ince yüz.
-        static readonly Vector3 DockCardScale = new Vector3(0.18f, 0.7f, 0.6f);
+        // Dock'a düşen kartın ölçeği (kullanıcı ayarı): X=ince yüz, Y=uzun kenar, Z=derinlik.
+        static readonly Vector3 DockCardScale = new Vector3(0.2f, 1.72f, 1f);
         static readonly Quaternion DockCardRot = Quaternion.Euler(-12f, 0f, 0f);
         static readonly Vector3 PocketScale = new Vector3(0.24f, 0.38f, 0.40f);
 
@@ -334,7 +334,7 @@ namespace CardFactory.Gameplay
 
             if (offerLabel != null) offerLabel.text = "New Dock";
             if (offerAmount != null) offerAmount.text = "1000";
-            if (offerRoot != null) Juice.PunchScale(offerRoot, Vector3.one, 0.25f, 0.3f);
+            // (Fail'de teklif butonunun "atma/zıplama" efekti kullanıcı isteğiyle kaldırıldı.)
 
             ResolveGlowRef();
             CaptureGlowBaseline();

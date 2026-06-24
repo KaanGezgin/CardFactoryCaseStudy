@@ -72,6 +72,13 @@ namespace CardFactory.UI
                     failGlowGo = glowT.gameObject;
                     failGlowRt = glowT.GetComponent<RectTransform>();
                     failGlowImg = glowT.GetComponent<Image>();
+                    // Baked eski sprite'ı yeni donut glow ile değiştir; KONUM/BOYUT'a dokunma
+                    // (Inspector'dan ayarladığın değerler korunur).
+                    if (failGlowImg != null)
+                    {
+                        failGlowImg.sprite = MakeSoftGlowSprite();
+                        failGlowImg.color = new Color(GlowColor.r, GlowColor.g, GlowColor.b, 0.5f);
+                    }
                     failGlowGo.SetActive(false);
                 }
                 else if (panel != null)
@@ -137,9 +144,12 @@ namespace CardFactory.UI
             panel.SetActive(false);
         }
 
+        // Yumuşak ışık havuzu rengi (image 3 gibi: nötr-serin beyaz, bloom'la parlar).
+        static readonly Color GlowColor = new Color(0.92f, 0.96f, 1f);
+
         /// <summary>
-        /// Fail ekranı karartmasının ÜSTÜNDE çizilen boş çember (3B ışık değil).
-        /// EndPanel ile kardeş; yanıp sönerek dock teklifini işaret eder.
+        /// Fail ekranı karartmasının ÜSTÜNDE çizilen, dock teklifini "aydınlatan"
+        /// yumuşak radyal ışık havuzu (dolu glow; image 3 gibi). EndPanel ile kardeş.
         /// </summary>
         void BuildFailOfferGlow(Transform canvasRoot)
         {
@@ -148,31 +158,33 @@ namespace CardFactory.UI
             failGlowRt = failGlowGo.AddComponent<RectTransform>();
             failGlowRt.anchorMin = failGlowRt.anchorMax = new Vector2(0.5f, 0.5f);
             failGlowRt.pivot = new Vector2(0.5f, 0.5f);
-            failGlowRt.sizeDelta = new Vector2(440, 440);
+            // Varsayılan konum/boyut (Inspector'dan ayarlanıp bake edilince bunlar korunur).
+            failGlowRt.sizeDelta = new Vector2(309f, 337f);
+            failGlowRt.anchoredPosition3D = new Vector3(340f, -321.5837f, 16.68921f);
 
             failGlowImg = failGlowGo.AddComponent<Image>();
             failGlowImg.raycastTarget = false;
-            failGlowImg.sprite = MakeRingSprite();
-            failGlowImg.color = new Color(1f, 0.92f, 0.35f, 0.9f);
+            failGlowImg.sprite = MakeSoftGlowSprite();
+            failGlowImg.color = new Color(GlowColor.r, GlowColor.g, GlowColor.b, 0.5f);
             failGlowGo.SetActive(false);
         }
 
-        /// <summary>İçi boş halka — merkez şeffaf, kenar parlak.</summary>
-        static Sprite MakeRingSprite(int size = 256, float inner = 0.58f, float outer = 0.78f)
+        /// <summary>
+        /// Yumuşak halka (donut) glow — MERKEZ BOŞ (arkadaki teklif görünür), kenarda yumuşak
+        /// parlama. mid = tepe yarıçapı, w = halkanın yumuşaklık genişliği.
+        /// </summary>
+        static Sprite MakeSoftGlowSprite(int size = 256, float mid = 0.66f, float w = 0.40f)
         {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
                 { wrapMode = TextureWrapMode.Clamp };
             float c = (size - 1) * 0.5f;
-            float mid = (inner + outer) * 0.5f;
-            float half = (outer - inner) * 0.5f + 0.04f;
             var px = new Color32[size * size];
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {
-                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
-                    float a = 1f - Mathf.Abs(d - mid) / half;
-                    a = Mathf.Clamp01(a);
-                    a *= a;
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c; // 0=merkez
+                    float a = Mathf.Clamp01(1f - Mathf.Abs(d - mid) / w);            // halka
+                    a = a * a * (3f - 2f * a);   // smoothstep → yumuşak kenar
                     px[y * size + x] = new Color(1f, 1f, 1f, a);
                 }
             tex.SetPixels32(px);
@@ -189,28 +201,12 @@ namespace CardFactory.UI
                 return;
             }
 
-            if (dock == null) dock = Object.FindFirstObjectByType<Dock>();
-            var cam = Camera.main;
-            if (dock == null || cam == null)
-            {
-                failGlowGo.SetActive(false);
-                return;
-            }
-
-            Vector3 screen = cam.WorldToScreenPoint(dock.OfferWorldPos);
-            if (screen.z < 0f)
-            {
-                failGlowGo.SetActive(false);
-                return;
-            }
-
-            failGlowRt.position = screen;
+            // Konum/boyut/scale Inspector'dan gelir; KOD EZMEZ. Sadece hafif alpha nefesi.
             failGlowPulse += Time.deltaTime;
-            float blink = Mathf.Sin(failGlowPulse * 3.4f) * 0.5f + 0.5f;
-            float alpha = Mathf.Lerp(0.18f, 0.95f, blink);
-            float scale = Mathf.Lerp(0.88f, 1.12f, blink);
-            failGlowRt.localScale = Vector3.one * scale;
-            failGlowImg.color = new Color(1f, 0.92f, 0.35f, alpha);
+            float breath = Mathf.Sin(failGlowPulse * 1.6f) * 0.5f + 0.5f;
+            float alpha = Mathf.Lerp(0.32f, 0.5f, breath);
+            if (failGlowImg != null)
+                failGlowImg.color = new Color(GlowColor.r, GlowColor.g, GlowColor.b, alpha);
             failGlowGo.SetActive(true);
         }
 

@@ -22,7 +22,10 @@ namespace CardFactory.Gameplay
 
         float endDist;
         const float Spacing = 0.78f;
-        const float CardLift = 0.22f;   // kart belt yüzeyinin üstünde
+        const float CardLift = 0.42f;   // dik kart belt yüzeyinin üstünde dursun
+
+        // Bant kartı DİK durur (domino): X=genişlik, Y=yükseklik, Z=bant yönünde ince.
+        static readonly Vector3 BeltCardScale = new Vector3(0.5f, 0.62f, 0.2f);
 
         readonly List<Card> belt = new();
         readonly Dictionary<CardColor, Material> cardMats = new();
@@ -76,7 +79,7 @@ namespace CardFactory.Gameplay
             go.transform.SetParent(transform, true);
             var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col);
-            go.transform.localScale = new Vector3(0.6f, 0.18f, 0.7f);
+            go.transform.localScale = BeltCardScale;
 
             var card = go.AddComponent<Card>();
             card.Setup(color, MatFor(color));
@@ -90,7 +93,7 @@ namespace CardFactory.Gameplay
             go.transform.position = WorldAt(card.BeltDist);
             belt.Add(card);
 
-            Juice.PopIn(go.transform, new Vector3(0.6f, 0.18f, 0.7f), 0.15f);
+            Juice.PopIn(go.transform, BeltCardScale, 0.15f);
         }
 
         void Update()

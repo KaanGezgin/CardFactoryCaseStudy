@@ -20,7 +20,7 @@ namespace CardFactory.Gameplay
         Conveyor conveyor;
         BoxCollider tapCollider;
 
-        const int MaxVisible = 20;
+        const int MaxVisible = 12;    // elde 16'ya kadar olsa da en fazla 12 kart görünür
         const float CardW = 0.85f;
         const float CardThick = 0.07f;
         const float CardLen = 0.95f;
