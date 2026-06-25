@@ -35,6 +35,30 @@ namespace CardFactory.Gameplay
             StartCoroutine(MoveRoutine(target, duration, onDone));
         }
 
+        /// <summary>Yay çizerek hareket (bant sonundan dock'a uçup konma gibi). height = tepe yüksekliği.</summary>
+        public void MoveArc(Vector3 target, float height, float duration, Action onDone = null)
+        {
+            StopAllCoroutines();
+            StartCoroutine(ArcRoutine(target, height, duration, onDone));
+        }
+
+        IEnumerator ArcRoutine(Vector3 target, float height, float duration, Action onDone)
+        {
+            Vector3 start = transform.position;
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                Vector3 p = Vector3.Lerp(start, target, Mathf.SmoothStep(0f, 1f, k));
+                p.y += height * 4f * k * (1f - k);   // parabolik tepe
+                transform.position = p;
+                yield return null;
+            }
+            transform.position = target;
+            onDone?.Invoke();
+        }
+
         IEnumerator MoveRoutine(Vector3 target, float duration, Action onDone)
         {
             Vector3 start = transform.position;

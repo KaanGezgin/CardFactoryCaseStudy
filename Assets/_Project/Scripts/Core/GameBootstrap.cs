@@ -32,6 +32,9 @@ namespace CardFactory.Core
 
         static int? pendingBuild;
 
+        /// <summary>Reklam modu (AdDirector aktif): demo board + otomatik el; normal input/HUD bastırılır.</summary>
+        public static bool AdMode;
+
         // Kalıcı ortam (her level'de yeniden yaratılmaz) referansları.
         static GameObject levelRoot;
         static Dock dock;
@@ -53,8 +56,16 @@ namespace CardFactory.Core
             var runnerGo = new GameObject("GameRunner");
             runnerGo.AddComponent<GameRunner>();
             Object.DontDestroyOnLoad(runnerGo);
+
+            AdMode = GameConfig.Default.adMode;   // config'te açıksa otomatik reklam
+
             BuildWorld();
             BuildLevel(0);
+
+            // Reklam yönetmeni: kalıcı, idle bekler; 'A' tuşu (veya adMode) ile başlar.
+            var adGo = new GameObject("AdDirector");
+            adGo.AddComponent<AdDirector>();
+            Object.DontDestroyOnLoad(adGo);
         }
 
         public static void RequestRebuild(int levelIndex) => pendingBuild = levelIndex;
@@ -246,7 +257,7 @@ namespace CardFactory.Core
             gate.ResetVisual();
 
             var config = GameConfig.Default;
-            var level = DefaultLevels.Get(levelIndex);
+            var level = AdMode ? DefaultLevels.GetDemo() : DefaultLevels.Get(levelIndex);
             levelRoot = new GameObject("CardFactoryLevel");
 
             dock.SetTension(config.dockTensionPulse);   // reklam için saklı (şimdilik kapalı)
@@ -267,11 +278,16 @@ namespace CardFactory.Core
             var stacks = BuildStacks(level, conveyor);   // kartlar stack anchor'ları altında
             gm.SetSystems(stacks, conveyor);
 
-            var input = new GameObject("InputController").AddComponent<InputController>();
-            input.transform.SetParent(levelRoot.transform, false);
-            input.Init(Camera.main, gm);
+            // Reklam modunda mouse input'u yok (AdDirector sürer).
+            InputController input = null;
+            if (!AdMode)
+            {
+                input = new GameObject("InputController").AddComponent<InputController>();
+                input.transform.SetParent(levelRoot.transform, false);
+                input.Init(Camera.main, gm);
+            }
 
-            if (config.showHandPointer)
+            if (config.showHandPointer || AdMode)
             {
                 // Karışık destelerde binColorOrder[0] hiçbir tepede olmayabilir.
                 // Geçerli ilk hamleyi göster: tepesi binColorOrder'da EN ERKEN gelen deste.
@@ -290,6 +306,7 @@ namespace CardFactory.Core
                     var hp = new GameObject("HandPointer").AddComponent<HandPointer>();
                     hp.transform.SetParent(levelRoot.transform, false);
                     hp.Init(target.transform.position, input);
+                    if (AdMode) hp.SetAutoTarget(target.transform.position + Vector3.up * 0.4f);
                 }
             }
 

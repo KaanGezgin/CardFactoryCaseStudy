@@ -424,7 +424,8 @@ namespace CardFactory.Gameplay
 
             card.transform.localScale = DockCardScale;
             card.transform.rotation = DockCardRot;
-            card.MoveTo(target, 0.25f, () =>
+            // Bant sonundan dock'a UÇARAK konar (yay).
+            card.MoveArc(target, 1.3f, 0.42f, () =>
             {
                 if (card != null)
                 {

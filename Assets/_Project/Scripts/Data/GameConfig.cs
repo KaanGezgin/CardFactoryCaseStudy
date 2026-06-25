@@ -12,7 +12,7 @@ namespace CardFactory.Data
     public class GameConfig
     {
         [Header("Konveyör")]
-        public float conveyorSpeed = 2.5f;     // birim/sn
+        public float conveyorSpeed = 4f;       // birim/sn (biraz daha hızlı)
         public int beltMaxCards = 20;          // yol limiti (X/20)
 
         [Header("Kutular")]
@@ -34,6 +34,7 @@ namespace CardFactory.Data
         [Header("Reklam efektleri")]
         public bool showHandPointer = true;     // ghost el-pointer
         public bool dockTensionPulse = true;    // dock dolarken kırmızı nabız
+        public bool adMode = false;             // true → Play'de otomatik reklam sekansı (AdDirector). 'A' tuşu da başlatır.
 
         public static GameConfig Default => new GameConfig();
     }

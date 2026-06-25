@@ -37,6 +37,46 @@ namespace CardFactory.Data
 
         public static LevelData Get(int index) => Generate(new System.Random());
 
+        /// <summary>
+        /// REKLAM için DETERMİNİSTİK demo board. Sıra (rank): Green→Yellow→Blue→Red.
+        /// BANTLI (her deste tepe=erken rank) → ZERO-DOCK kazanılabilir: doğru oynanışta tüm
+        /// kartlar biter (success). Yanlış/savruk oynanışta Blue/Red erken gönderilir → dock dolar (fail).
+        /// Her renk toplam 12 (2 tam kutu), bloklar 4'er.
+        /// </summary>
+        public static LevelData GetDemo()
+        {
+            var order = new List<CardColor>
+            { CardColor.Green, CardColor.Yellow, CardColor.Blue, CardColor.Red };
+
+            // top = tepe, bot = taban. Liste index 0 = taban.
+            List<CardColor> Col(CardColor top, CardColor mid, CardColor bot)
+            {
+                var s = new List<CardColor>();
+                for (int i = 0; i < 4; i++) s.Add(bot);
+                for (int i = 0; i < 4; i++) s.Add(mid);
+                for (int i = 0; i < 4; i++) s.Add(top);
+                return s;
+            }
+
+            var stacks = new List<List<CardColor>>
+            {
+                Col(CardColor.Green,  CardColor.Yellow, CardColor.Blue),  // ranks 0,1,2
+                Col(CardColor.Green,  CardColor.Yellow, CardColor.Red),   // ranks 0,1,3
+                Col(CardColor.Green,  CardColor.Blue,   CardColor.Red),   // ranks 0,2,3
+                Col(CardColor.Yellow, CardColor.Blue,   CardColor.Red),   // ranks 1,2,3
+            };
+
+            return new LevelData
+            {
+                activeBinCount = 2,
+                binCapacity = BinCap,
+                dockCapacity = DockCap,
+                beltMaxCards = BeltMax,
+                binColorOrder = order,
+                stacks = stacks,
+            };
+        }
+
         static LevelData Generate(System.Random rng)
         {
             // Karışık blok sırası dene → zero-dock kazanılabilirse al.

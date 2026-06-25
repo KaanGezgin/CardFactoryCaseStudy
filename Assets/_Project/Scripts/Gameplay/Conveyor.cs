@@ -22,10 +22,10 @@ namespace CardFactory.Gameplay
 
         float endDist;
         const float Spacing = 0.78f;
-        const float CardLift = 0.42f;   // dik kart belt yüzeyinin üstünde dursun
+        const float CardLift = 0.8f;    // dik kart belt yüzeyinin üstünde dursun
 
         // Bant kartı DİK durur (domino): X=genişlik, Y=yükseklik, Z=bant yönünde ince.
-        static readonly Vector3 BeltCardScale = new Vector3(0.5f, 0.62f, 0.2f);
+        static readonly Vector3 BeltCardScale = new Vector3(1f, 1.45f, 0.25f);
 
         readonly List<Card> belt = new();
         readonly Dictionary<CardColor, Material> cardMats = new();

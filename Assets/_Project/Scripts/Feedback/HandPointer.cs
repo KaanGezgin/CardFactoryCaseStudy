@@ -19,6 +19,8 @@ namespace CardFactory.Feedback
         Material ghostMat;
         Camera cam;
         float clickT;                  // sol tık basış animasyonu (1→0)
+        bool autoDriven;               // AdDirector sürüyorsa mouse yerine autoTarget'ı takip et
+        Vector3 autoTarget;
 
         const float PlaneY = 1.4f;     // elin süzüldüğü düzlem (kart üst yüzeyinin üstünde → içine girmesin)
         const float HandScale = 2f;    // kök obje ölçeği (x,y,z)
@@ -46,21 +48,40 @@ namespace CardFactory.Feedback
             Cursor.visible = true;
         }
 
-        /// <summary>Mouse'u zemin düzlemine ışınlayıp el konumunu (yumuşak) oraya taşır.</summary>
+        /// <summary>AdDirector için: el bu dünya noktasını (parmak ucuyla) hedefler.</summary>
+        public void SetAutoTarget(Vector3 worldPoint)
+        {
+            autoDriven = true;
+            autoTarget = worldPoint;
+        }
+
+        /// <summary>AdDirector için: tık "seçme" basışını programatik tetikle.</summary>
+        public void Press() => clickT = 1f;
+
+        /// <summary>Mouse'u (veya AdDirector hedefini) zemin düzlemine alıp el konumunu yumuşatır.</summary>
         void FollowCursor()
         {
-            if (cam == null) cam = Camera.main;
-            if (cam == null) return;
-
-            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
-            var plane = new Plane(Vector3.up, new Vector3(0f, PlaneY, 0f));
-            if (plane.Raycast(ray, out float enter))
+            Vector3 point;
+            if (autoDriven)
             {
-                // Parmak UCU cursor noktasında dursun → kökü ofset kadar geri al.
-                Vector3 desiredRoot = ray.GetPoint(enter) - fingerOffset;
-                transform.position = Vector3.Lerp(transform.position, desiredRoot,
-                    1f - Mathf.Exp(-22f * Time.deltaTime));
+                // Boşta hafif sürüklenme → "düşünüyormuş" gibi canlı dursun.
+                float tt = Time.time;
+                point = autoTarget + new Vector3(Mathf.Sin(tt * 1.3f) * 0.18f, 0f, Mathf.Cos(tt * 1.0f) * 0.12f);
             }
+            else
+            {
+                if (cam == null) cam = Camera.main;
+                if (cam == null) return;
+                Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+                var plane = new Plane(Vector3.up, new Vector3(0f, PlaneY, 0f));
+                if (!plane.Raycast(ray, out float enter)) return;
+                point = ray.GetPoint(enter);
+            }
+
+            // Parmak UCU hedef noktada dursun → kökü ofset kadar geri al.
+            Vector3 desiredRoot = point - fingerOffset;
+            transform.position = Vector3.Lerp(transform.position, desiredRoot,
+                1f - Mathf.Exp(-22f * Time.deltaTime));
         }
 
         static Material BuildGhostMaterial()

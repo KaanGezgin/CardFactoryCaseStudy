@@ -20,8 +20,10 @@ namespace CardFactory.UI
         Sprite roundedSprite;
 
         GameObject panel;
+        Image endTint;          // tam ekran karartma/renk tint (reklamda kırmızı/yeşil)
         Image bannerFront;
         Text bannerText;
+        Text adSub;             // reklam alt yazısı ("Can you do it?" / "So satisfying!")
         GameObject nextButton;
         GameObject closeButton;
 
@@ -57,10 +59,19 @@ namespace CardFactory.UI
                 if (panelT != null)
                 {
                     panel = panelT.gameObject;
+                    endTint = panel.GetComponent<Image>();
                     bannerFront = panelT.Find("BannerFront")?.GetComponent<Image>();
                     bannerText = panelT.Find("Banner")?.GetComponent<Text>();
                     nextButton = panelT.Find("NextBtn")?.gameObject;
                     closeButton = panelT.Find("CloseBtn")?.gameObject;
+                    adSub = panelT.Find("AdSub")?.GetComponent<Text>();
+                    if (adSub == null)
+                    {
+                        adSub = MakeText("AdSub", panel.transform, 64, TextAnchor.MiddleCenter,
+                            new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(900, 160));
+                        adSub.color = Color.white;
+                    }
+                    adSub.gameObject.SetActive(false);
                     WireButton(nextButton, () => GameManager.Instance?.NextLevel());
                     WireButton(closeButton, () => GameManager.Instance?.Restart());
                     panel.SetActive(false);
@@ -122,6 +133,7 @@ namespace CardFactory.UI
             panel.transform.SetParent(root, false);
             var img = panel.AddComponent<Image>();
             img.color = new Color(0f, 0f, 0f, 0.22f);
+            endTint = img;
             var rt = img.rectTransform;
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
@@ -136,6 +148,11 @@ namespace CardFactory.UI
             bannerText = MakeText("Banner", panel.transform, 100, TextAnchor.MiddleCenter,
                 new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(820, 300));
             bannerText.color = Color.white;
+
+            adSub = MakeText("AdSub", panel.transform, 64, TextAnchor.MiddleCenter,
+                new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(900, 160));
+            adSub.color = Color.white;
+            adSub.gameObject.SetActive(false);
 
             nextButton = MakeButton("NextBtn", panel.transform, "NEXT LEVEL", new Vector2(0, -260),
                 () => GameManager.Instance?.NextLevel());
@@ -208,6 +225,33 @@ namespace CardFactory.UI
             if (failGlowImg != null)
                 failGlowImg.color = new Color(GlowColor.r, GlowColor.g, GlowColor.b, alpha);
             failGlowGo.SetActive(true);
+        }
+
+        /// <summary>
+        /// REKLAM (AdDirector) için: mevcut yuvarlatılmış banner panelini kullanır. NEXT/X butonları
+        /// gizli; alt yazı + tam ekran renk tint (kırmızı fail / yeşil success). Timing AdDirector'da.
+        /// </summary>
+        public void ShowAdMessage(string banner, string sub, Color front, Color tint)
+        {
+            if (panel == null) return;
+            panel.SetActive(true);
+            if (endTint != null) endTint.color = tint;
+            if (bannerText != null) bannerText.text = banner;
+            if (bannerFront != null) bannerFront.color = front;
+            if (nextButton != null) nextButton.SetActive(false);
+            if (closeButton != null) closeButton.SetActive(false);
+            if (adSub != null)
+            {
+                adSub.text = sub;
+                adSub.gameObject.SetActive(!string.IsNullOrEmpty(sub));
+            }
+        }
+
+        public void HideAdMessage()
+        {
+            if (panel != null) panel.SetActive(false);
+            if (endTint != null) endTint.color = new Color(0f, 0f, 0f, 0.22f);
+            if (adSub != null) adSub.gameObject.SetActive(false);
         }
 
         void WireButton(GameObject go, UnityAction action)
@@ -321,6 +365,13 @@ namespace CardFactory.UI
 
         void Update()
         {
+            // Reklam modunda paneli AdDirector açıkça yönetir (ShowAdMessage); otomatik akışı atla.
+            if (GameBootstrap.AdMode)
+            {
+                if (failGlowGo != null && failGlowGo.activeSelf) failGlowGo.SetActive(false);
+                return;
+            }
+
             var gm = GameManager.Instance;
             if (gm == null) return;
 
