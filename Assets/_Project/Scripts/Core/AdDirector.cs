@@ -43,7 +43,8 @@ namespace CardFactory.Core
             if (running) return;
             running = true;
             GameBootstrap.AdMode = true;
-            GameBootstrap.RequestRebuild(0);     // temiz demo board
+            GameBootstrap.AdWinnableBoard = false;   // 1. aşama: kazanılamaz fail board
+            GameBootstrap.RequestRebuild(0);
             StartCoroutine(Sequence());
         }
 
@@ -60,14 +61,16 @@ namespace CardFactory.Core
             // Beat 0 — Hook.
             yield return new WaitForSeconds(1.3f);
 
-            // Beat 1 — Fail-bait: savruk oyna → dock dolana kadar (gerçek FAILED).
+            // Beat 1 — Fail-bait: kazanılamaz board → dock dolar → gerçek LEVEL FAILED.
             yield return PlayCareless(35);
             yield return new WaitForSeconds(0.3f);
-            Hud()?.ShowAdMessage("FAILED", "Can you do it?", FailFront, FailTint);
+            Sfx.Play("fail");
+            Hud()?.ShowAdMessage("LEVEL FAILED", "Can you do it?", FailFront, FailTint);
             yield return new WaitForSeconds(1.9f);
             Hud()?.HideAdMessage();
 
-            // Reset — temiz board.
+            // Reset — kazanılabilir (success) board.
+            GameBootstrap.AdWinnableBoard = true;
             GameBootstrap.RequestRebuild(0);
             yield return WaitForBoard();
             SetupHand();
@@ -76,25 +79,26 @@ namespace CardFactory.Core
             // Beat 2 — Success: doğru oyna → tüm kartlar biter (gerçek COMPLETE).
             yield return PlaySmart(40);
             yield return new WaitForSeconds(0.4f);
-            Hud()?.ShowAdMessage("LEVEL COMPLETE", "So satisfying!", WinFront, WinTint);
+            Sfx.Play("complete");
+            Hud()?.ShowAdMessage("LEVEL COMPLETE", "Your turn — tap to play!", WinFront, WinTint);
             yield return new WaitForSeconds(2.0f);
 
             // Beat 3 — CTA (ekranda kalır).
-            Hud()?.ShowAdMessage("Play now!", "", WinFront, WinTint);
+            Hud()?.ShowAdMessage("Play now!", "It's free!", WinFront, WinTint);
 
             running = false;
         }
 
-        /// <summary>Savruk oyun: herhangi tepe grubunu gönder → eşleşmeyenler dock'a → dolunca fail.</summary>
+        /// <summary>Fail oyun: aktif-OLMAYAN tepe grubunu gönder → dock'a gider → dolunca fail.</summary>
         IEnumerator PlayCareless(int maxTaps)
         {
             for (int i = 0; i < maxTaps; i++)
             {
                 var gm = GameManager.Instance;
                 if (gm != null && gm.State == GameState.Lost) yield break;   // dock doldu
-                var s = AnyNonEmptyStack();
+                var s = FindWrongTopStack() ?? AnyNonEmptyStack();
                 if (s == null) break;
-                yield return TapStack(s, 0.45f);
+                yield return TapStack(s, 0.4f);
             }
             yield return WaitForLost(8f);   // gönderilen kartlar dock'a varıp doldursun
         }
@@ -210,6 +214,15 @@ namespace CardFactory.Core
             var active = ActiveColors();
             foreach (var s in GetStacks())
                 if (s != null && !s.IsEmpty && s.TopColor.HasValue && active.Contains(s.TopColor.Value))
+                    return s;
+            return null;
+        }
+
+        CardStack FindWrongTopStack()
+        {
+            var active = ActiveColors();
+            foreach (var s in GetStacks())
+                if (s != null && !s.IsEmpty && s.TopColor.HasValue && !active.Contains(s.TopColor.Value))
                     return s;
             return null;
         }

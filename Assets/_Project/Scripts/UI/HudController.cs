@@ -1,3 +1,4 @@
+using System.Collections;
 using CardFactory.Core;
 using CardFactory.Gameplay;
 using UnityEngine;
@@ -21,9 +22,11 @@ namespace CardFactory.UI
 
         GameObject panel;
         Image endTint;          // tam ekran karartma/renk tint (reklamda kırmızı/yeşil)
+        Image bannerBack;
         Image bannerFront;
         Text bannerText;
         Text adSub;             // reklam alt yazısı ("Can you do it?" / "So satisfying!")
+        Coroutine adPopCo;
         GameObject nextButton;
         GameObject closeButton;
 
@@ -60,6 +63,7 @@ namespace CardFactory.UI
                 {
                     panel = panelT.gameObject;
                     endTint = panel.GetComponent<Image>();
+                    bannerBack = panelT.Find("BannerBack")?.GetComponent<Image>();
                     bannerFront = panelT.Find("BannerFront")?.GetComponent<Image>();
                     bannerText = panelT.Find("Banner")?.GetComponent<Text>();
                     nextButton = panelT.Find("NextBtn")?.gameObject;
@@ -140,7 +144,7 @@ namespace CardFactory.UI
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
 
-            MakePanelImage("BannerBack", panel.transform, Color.white,
+            bannerBack = MakePanelImage("BannerBack", panel.transform, Color.white,
                 new Vector2(880, 360), new Vector2(0, 220));
             bannerFront = MakePanelImage("BannerFront", panel.transform,
                 new Color(0.93f, 0.27f, 0.30f), new Vector2(820, 300), new Vector2(0, 220));
@@ -235,7 +239,6 @@ namespace CardFactory.UI
         {
             if (panel == null) return;
             panel.SetActive(true);
-            if (endTint != null) endTint.color = tint;
             if (bannerText != null) bannerText.text = banner;
             if (bannerFront != null) bannerFront.color = front;
             if (nextButton != null) nextButton.SetActive(false);
@@ -245,13 +248,58 @@ namespace CardFactory.UI
                 adSub.text = sub;
                 adSub.gameObject.SetActive(!string.IsNullOrEmpty(sub));
             }
+            if (adPopCo != null) StopCoroutine(adPopCo);
+            adPopCo = StartCoroutine(AdPop(tint));
         }
 
         public void HideAdMessage()
         {
+            if (adPopCo != null) { StopCoroutine(adPopCo); adPopCo = null; }
+            SetBannerScale(1f);
             if (panel != null) panel.SetActive(false);
             if (endTint != null) endTint.color = new Color(0f, 0f, 0f, 0.22f);
             if (adSub != null) adSub.gameObject.SetActive(false);
+        }
+
+        /// <summary>Banner pop (geri-yaylı) + tint fade, sonra hafif nefes. Tamamen koddan efekt.</summary>
+        IEnumerator AdPop(Color tint)
+        {
+            float t = 0f, dur = 0.34f;
+            while (t < dur)
+            {
+                float k = t / dur;
+                SetBannerScale(Mathf.LerpUnclamped(0.4f, 1f, EaseOutBack(k)));
+                if (endTint != null)
+                    endTint.color = new Color(tint.r, tint.g, tint.b, tint.a * Mathf.SmoothStep(0f, 1f, k));
+                t += Time.deltaTime;
+                yield return null;
+            }
+            SetBannerScale(1f);
+            if (endTint != null) endTint.color = tint;
+
+            float b = 0f;
+            while (true)   // ekranda kaldıkça hafif nefes
+            {
+                b += Time.deltaTime;
+                SetBannerScale(1f + Mathf.Sin(b * 2.4f) * 0.02f);
+                yield return null;
+            }
+        }
+
+        void SetBannerScale(float s)
+        {
+            var v = new Vector3(s, s, 1f);
+            if (bannerBack != null) bannerBack.rectTransform.localScale = v;
+            if (bannerFront != null) bannerFront.rectTransform.localScale = v;
+            if (bannerText != null) bannerText.rectTransform.localScale = v;
+            if (adSub != null) adSub.rectTransform.localScale = v;
+        }
+
+        static float EaseOutBack(float k)
+        {
+            const float c1 = 1.70158f, c3 = c1 + 1f;
+            float p = k - 1f;
+            return 1f + c3 * p * p * p + c1 * p * p;
         }
 
         void WireButton(GameObject go, UnityAction action)

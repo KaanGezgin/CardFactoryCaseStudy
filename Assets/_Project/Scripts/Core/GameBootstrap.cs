@@ -35,6 +35,9 @@ namespace CardFactory.Core
         /// <summary>Reklam modu (AdDirector aktif): demo board + otomatik el; normal input/HUD bastırılır.</summary>
         public static bool AdMode;
 
+        /// <summary>Reklamda hangi demo board: true → kazanılabilir (success), false → kazanılamaz (fail).</summary>
+        public static bool AdWinnableBoard;
+
         // Kalıcı ortam (her level'de yeniden yaratılmaz) referansları.
         static GameObject levelRoot;
         static Dock dock;
@@ -257,7 +260,9 @@ namespace CardFactory.Core
             gate.ResetVisual();
 
             var config = GameConfig.Default;
-            var level = AdMode ? DefaultLevels.GetDemo() : DefaultLevels.Get(levelIndex);
+            var level = AdMode
+                ? (AdWinnableBoard ? DefaultLevels.GetDemo() : DefaultLevels.GetDemoFail())
+                : DefaultLevels.Get(levelIndex);
             levelRoot = new GameObject("CardFactoryLevel");
 
             dock.SetTension(config.dockTensionPulse);   // reklam için saklı (şimdilik kapalı)

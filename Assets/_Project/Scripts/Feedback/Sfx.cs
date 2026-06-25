@@ -34,13 +34,13 @@ namespace CardFactory.Feedback
         {
             clips = new Dictionary<string, AudioClip>
             {
-                { "click",    Tone(880f, 0.07f, 0.30f) },
-                { "send",     Sweep(500f, 900f, 0.14f, 0.28f) },
-                { "fill",     Tone(660f, 0.05f, 0.18f) },
-                { "ship",     TwoTone(660f, 988f, 0.22f, 0.40f) },
-                { "complete", TwoTone(523f, 784f, 0.30f, 0.45f) },
-                { "warn",     Tone(170f, 0.16f, 0.45f) },
-                { "fail",     Sweep(400f, 150f, 0.5f, 0.45f) },
+                { "click",    Tone(900f, 0.08f, 0.55f) },
+                { "send",     Sweep(520f, 1000f, 0.16f, 0.5f) },
+                { "fill",     Tone(720f, 0.07f, 0.42f) },
+                { "ship",     Arp(new[] { 660f, 990f, 1320f }, 0.085f, 0.8f) },   // ka-ching
+                { "complete", Arp(new[] { 523f, 659f, 784f, 1046f, 1318f }, 0.10f, 0.95f) }, // fanfar
+                { "warn",     Tone(190f, 0.18f, 0.7f) },
+                { "fail",     Arp(new[] { 392f, 311f, 233f, 165f }, 0.16f, 0.9f) }, // ağır iniş
             };
         }
 
@@ -49,7 +49,7 @@ namespace CardFactory.Feedback
             if (Application.isBatchMode) return;
             var s = Src;
             if (clips.TryGetValue(name, out var c) && c != null)
-                s.PlayOneShot(c);
+                s.PlayOneShot(c, 1f);
         }
 
         public static void Haptic()
@@ -59,7 +59,21 @@ namespace CardFactory.Feedback
 #endif
         }
 
-        // --- Sentez ---
+        // --- Sentez (harmonik zengin + atak/iniş zarfı → daha çarpıcı) ---
+
+        /// <summary>Temel + 2./3. harmonik (normalize ~1 tepe) → daha dolgun ton.</summary>
+        static float Voice(float phase)
+        {
+            return (Mathf.Sin(phase) + 0.45f * Mathf.Sin(2f * phase) + 0.22f * Mathf.Sin(3f * phase)) / 1.67f;
+        }
+
+        /// <summary>Hızlı atak + pürüzsüz iniş zarfı.</summary>
+        static float Env(int i, int n)
+        {
+            float u = (float)i / n;
+            float a = u < 0.02f ? u / 0.02f : 1f;          // ~2% atak (klik/pop hissi)
+            return a * Mathf.Pow(1f - u, 1.3f);
+        }
 
         static AudioClip Tone(float freq, float dur, float vol)
         {
@@ -67,9 +81,8 @@ namespace CardFactory.Feedback
             var data = new float[n];
             for (int i = 0; i < n; i++)
             {
-                float t = (float)i / Rate;
-                float env = Mathf.Clamp01(1f - (float)i / n);
-                data[i] = Mathf.Sin(2f * Mathf.PI * freq * t) * vol * env;
+                float ph = 2f * Mathf.PI * freq * ((float)i / Rate);
+                data[i] = Voice(ph) * vol * Env(i, n);
             }
             return MakeClip(data);
         }
@@ -81,27 +94,25 @@ namespace CardFactory.Feedback
             float phase = 0f;
             for (int i = 0; i < n; i++)
             {
-                float u = (float)i / n;
-                float f = Mathf.Lerp(f0, f1, u);
+                float f = Mathf.Lerp(f0, f1, (float)i / n);
                 phase += 2f * Mathf.PI * f / Rate;
-                float env = Mathf.Clamp01(1f - u);
-                data[i] = Mathf.Sin(phase) * vol * env;
+                data[i] = Voice(phase) * vol * Env(i, n);
             }
             return MakeClip(data);
         }
 
-        static AudioClip TwoTone(float f0, float f1, float dur, float vol)
+        /// <summary>Arpej: her nota kendi pluck zarfıyla → ka-ching / fanfar / iniş.</summary>
+        static AudioClip Arp(float[] freqs, float noteDur, float vol)
         {
-            int n = Mathf.Max(1, (int)(Rate * dur));
+            int seg = Mathf.Max(1, (int)(Rate * noteDur));
+            int n = seg * freqs.Length;
             var data = new float[n];
-            int half = n / 2;
-            for (int i = 0; i < n; i++)
-            {
-                float t = (float)i / Rate;
-                float f = i < half ? f0 : f1;
-                float env = Mathf.Clamp01(1f - (float)i / n);
-                data[i] = Mathf.Sin(2f * Mathf.PI * f * t) * vol * env;
-            }
+            for (int k = 0; k < freqs.Length; k++)
+                for (int j = 0; j < seg; j++)
+                {
+                    float ph = 2f * Mathf.PI * freqs[k] * ((float)j / Rate);
+                    data[k * seg + j] = Voice(ph) * vol * Env(j, seg);
+                }
             return MakeClip(data);
         }
 

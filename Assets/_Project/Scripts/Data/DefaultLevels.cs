@@ -38,10 +38,46 @@ namespace CardFactory.Data
         public static LevelData Get(int index) => Generate(new System.Random());
 
         /// <summary>
-        /// REKLAM için DETERMİNİSTİK demo board. Sıra (rank): Green→Yellow→Blue→Red.
-        /// BANTLI (her deste tepe=erken rank) → ZERO-DOCK kazanılabilir: doğru oynanışta tüm
-        /// kartlar biter (success). Yanlış/savruk oynanışta Blue/Red erken gönderilir → dock dolar (fail).
-        /// Her renk toplam 12 (2 tam kutu), bloklar 4'er.
+        /// REKLAM FAIL board'u: deste TEPELERİ aktif-OLMAYAN renkler (Blue/Red) ile dolu →
+        /// her basış dock'a gider → dock KESİN dolar (kazanılamaz, "fail-bait"). Aktif renkler
+        /// (Green/Yellow) tabanda gömülü, erişilmeden dock dolar. Sıra: Green→Yellow→Blue→Red.
+        /// </summary>
+        public static LevelData GetDemoFail()
+        {
+            var order = new List<CardColor>
+            { CardColor.Green, CardColor.Yellow, CardColor.Blue, CardColor.Red };
+
+            List<CardColor> Col(CardColor top, CardColor mid, CardColor bot)
+            {
+                var s = new List<CardColor>();
+                for (int i = 0; i < 4; i++) s.Add(bot);
+                for (int i = 0; i < 4; i++) s.Add(mid);
+                for (int i = 0; i < 4; i++) s.Add(top);
+                return s;
+            }
+
+            var stacks = new List<List<CardColor>>
+            {
+                Col(CardColor.Blue, CardColor.Red,  CardColor.Green),   // tepe Blue (aktif değil)
+                Col(CardColor.Red,  CardColor.Blue, CardColor.Yellow),  // tepe Red
+                Col(CardColor.Blue, CardColor.Red,  CardColor.Green),
+                Col(CardColor.Red,  CardColor.Blue, CardColor.Yellow),
+            };
+
+            return new LevelData
+            {
+                activeBinCount = 2,
+                binCapacity = BinCap,
+                dockCapacity = DockCap,
+                beltMaxCards = BeltMax,
+                binColorOrder = order,
+                stacks = stacks,
+            };
+        }
+
+        /// <summary>
+        /// REKLAM SUCCESS board'u. Sıra (rank): Green→Yellow→Blue→Red. BANTLI (her deste tepe=erken
+        /// rank) → ZERO-DOCK kazanılabilir: doğru oynanışta tüm kartlar biter. Her renk 12, bloklar 4.
         /// </summary>
         public static LevelData GetDemo()
         {
