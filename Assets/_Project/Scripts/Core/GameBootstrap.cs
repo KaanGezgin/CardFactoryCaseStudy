@@ -695,6 +695,151 @@ namespace CardFactory.Core
             if (endT != null) SpawnContactShadow(root.transform, endT.position, 2.1f, 1.4f);
         }
 
+        // ---- Arka plan "çalışan fabrika" dekoru -----------------------------
+        /// <summary>
+        /// Oyun zemininin ARKASINDAKİ (z>9) boş mavi alana sevimli bir çalışan fabrika
+        /// kurar: arka zemin + akan bantlar + sağa-sola giden kutular + birkaç makine.
+        /// Idempotent ("BackgroundFactory" kökü varsa atlar) → bake + reuse'da bir kez kurulur.
+        /// Animasyon Play'de çalışır (DecorMover/BeltFlow); bake'te de serialize edilir.
+        /// </summary>
+        static void EnsureBackgroundFactory(GameObject world)
+        {
+            if (world.transform.Find("BackgroundFactory") != null) return;
+
+            var root = new GameObject("BackgroundFactory");
+            root.transform.SetParent(world.transform, false);
+
+            // Arka zemin (gridi sürdürür) — bantlar bunun üstünde durur.
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            floor.name = "BackFloor";
+            var fcol = floor.GetComponent<Collider>();
+            if (fcol != null) Object.Destroy(fcol);
+            floor.transform.SetParent(root.transform, false);
+            floor.transform.localPosition = new Vector3(0f, -0.52f, 15f);   // ana zeminin altına tuttur (dikişsiz)
+            floor.transform.localScale = new Vector3(34f, 1f, 12f);
+            floor.GetComponent<Renderer>().sharedMaterial = GroundMaterial();
+
+            // Akan bantlar (sağa-sola dönüşümlü), z arttıkça kademeli yükselir → bandın
+            // arkasında net görünür. Üstlerinde sevimli renkli kutular gider.
+            BuildDecorBelt(root.transform, 10.5f, 0.8f, +1.7f);
+            BuildDecorBelt(root.transform, 13.5f, 1.2f, -1.5f);
+            BuildDecorBelt(root.transform, 16.5f, 1.6f, +1.3f);
+
+            // Arka silolar / makineler (skyline flavor) — statik.
+            var machMat = NewLitMaterial(new Color(0.62f, 0.66f, 0.72f));
+            var siloMat = NewLitMaterial(new Color(0.78f, 0.81f, 0.86f));
+            foreach (var sx in new[] { -12.5f, -9.5f, 10f, 13f })
+            {
+                var silo = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                silo.name = "BackSilo";
+                var scol = silo.GetComponent<Collider>();
+                if (scol != null) Object.Destroy(scol);
+                silo.transform.SetParent(root.transform, false);
+                silo.transform.localPosition = new Vector3(sx, 1.1f, 18.5f);
+                silo.transform.localScale = new Vector3(1.5f, 1.2f, 1.5f);
+                silo.GetComponent<Renderer>().sharedMaterial = siloMat;
+
+                var cap = ProcMesh.RoundedCube("BackSiloCap");
+                var ccol = cap.GetComponent<Collider>();
+                if (ccol != null) Object.Destroy(ccol);
+                cap.transform.SetParent(root.transform, false);
+                cap.transform.localPosition = new Vector3(sx, 2.45f, 18.5f);
+                cap.transform.localScale = new Vector3(1.7f, 0.4f, 1.7f);
+                cap.GetComponent<Renderer>().sharedMaterial = machMat;
+            }
+        }
+
+        /// <summary>Tek bir dekor bandı: kaide + ray + akan chevron + üstünde giden kutular.</summary>
+        static void BuildDecorBelt(Transform parent, float z, float y, float speed)
+        {
+            const float halfLen = 13f, surfaceY = 0.16f;
+            var beltRoot = new GameObject("DecorBelt");
+            beltRoot.transform.SetParent(parent, false);
+            beltRoot.transform.localPosition = new Vector3(0f, y, z);
+
+            // Kaide
+            var slab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            slab.name = "DecorBeltSlab";
+            DestroyColliderGO(slab);
+            slab.transform.SetParent(beltRoot.transform, false);
+            slab.transform.localPosition = Vector3.zero;
+            slab.transform.localScale = new Vector3(halfLen * 2f, 0.22f, 1.15f);
+            slab.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.38f, 0.43f, 0.52f));
+
+            // Yan raylar
+            var railMat = NewLitMaterial(new Color(0.6f, 0.65f, 0.74f));
+            for (int s = -1; s <= 1; s += 2)
+            {
+                var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                rail.name = "DecorBeltRail";
+                DestroyColliderGO(rail);
+                rail.transform.SetParent(beltRoot.transform, false);
+                rail.transform.localPosition = new Vector3(0f, 0.06f, s * 0.62f);
+                rail.transform.localScale = new Vector3(halfLen * 2f, 0.16f, 0.12f);
+                rail.GetComponent<Renderer>().sharedMaterial = railMat;
+            }
+
+            // Destek ayakları (zemine iner) → bant havada durmasın.
+            var legMat = NewLitMaterial(new Color(0.5f, 0.54f, 0.6f));
+            foreach (var lx in new[] { -halfLen * 0.8f, halfLen * 0.8f })
+            {
+                var leg = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                leg.name = "DecorLeg";
+                DestroyColliderGO(leg);
+                leg.transform.SetParent(beltRoot.transform, false);
+                leg.transform.localPosition = new Vector3(lx, -y * 0.5f, 0f);
+                leg.transform.localScale = new Vector3(0.25f, y, 0.25f);
+                leg.GetComponent<Renderer>().sharedMaterial = legMat;
+            }
+
+            // Akan chevron'lar (bandın yönünde)
+            var chevMat = NewLitMaterial(new Color(0.7f, 0.75f, 0.84f));
+            var flowGo = new GameObject("DecorFlow");
+            flowGo.transform.SetParent(beltRoot.transform, false);
+            var flow = flowGo.AddComponent<BeltFlow>();
+            int chevCount = 10;
+            var chevrons = new Transform[chevCount];
+            for (int i = 0; i < chevCount; i++)
+                chevrons[i] = BuildChevron(flowGo.transform, chevMat);
+            // Yön: speed>0 → -x'ten +x'e; tersi tam tersi.
+            var wp = speed >= 0f
+                ? new[] { new Vector3(-halfLen, 0f, 0f), new Vector3(halfLen, 0f, 0f) }
+                : new[] { new Vector3(halfLen, 0f, 0f), new Vector3(-halfLen, 0f, 0f) };
+            flow.Setup(wp, chevrons, Mathf.Abs(speed) * 1.3f, surfaceY);
+
+            // Üstünde giden kutular (sevimli renkli)
+            var boxesRoot = new GameObject("DecorBoxes");
+            boxesRoot.transform.SetParent(beltRoot.transform, false);
+            const int n = 6;
+            float span = halfLen * 2f - 1f;
+            float spacing = span / n;
+            var boxes = new Transform[n];
+            var palette = new[]
+            {
+                new Color(0.93f, 0.30f, 0.30f), new Color(0.30f, 0.62f, 0.95f),
+                new Color(0.98f, 0.80f, 0.25f), new Color(0.35f, 0.80f, 0.45f),
+                new Color(0.70f, 0.45f, 0.90f), new Color(0.98f, 0.58f, 0.25f),
+            };
+            for (int i = 0; i < n; i++)
+            {
+                var box = ProcMesh.RoundedCube("DecorBox");
+                DestroyColliderGO(box);
+                box.transform.SetParent(boxesRoot.transform, false);
+                box.transform.localPosition = new Vector3(-halfLen + 0.5f + i * spacing, 0.42f, 0f);
+                box.transform.localScale = new Vector3(0.62f, 0.6f, 0.62f);
+                box.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(palette[i % palette.Length] * 0.92f);
+                boxes[i] = box.transform;
+            }
+            var mover = boxesRoot.AddComponent<DecorMover>();
+            mover.Setup(boxes, speed, -halfLen + 0.5f, halfLen - 0.5f);
+        }
+
+        static void DestroyColliderGO(GameObject go)
+        {
+            var c = go.GetComponent<Collider>();
+            if (c != null) Object.Destroy(c);
+        }
+
         static void BuildEndCap(Transform parent, Vector3 endPt)
         {
             var go = ProcMesh.RoundedCube("BeltEndCap");
@@ -850,6 +995,9 @@ namespace CardFactory.Core
 
             // Kalıcı objelerin zemin kontakt gölgeleri (idempotent).
             EnsureGroundShadows(world);
+
+            // Arka plandaki boş alana "çalışan fabrika" dekoru (idempotent).
+            EnsureBackgroundFactory(world);
 
             // Grid zemin
             var ground = world.transform.Find("Ground");
