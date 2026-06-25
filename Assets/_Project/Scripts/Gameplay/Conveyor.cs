@@ -20,6 +20,7 @@ namespace CardFactory.Gameplay
         Dock dock;
         FactoryGate gate;
         BeltPath path;
+        Transform entryPortal;   // sahnedeki "GateSlot" → kartlar buradan giriyormuş gibi
 
         float endDist;
         const float Spacing = 0.78f;
@@ -44,6 +45,12 @@ namespace CardFactory.Gameplay
             path = beltPath;
             endDist = path.Length;
             gate.SetCount(0, cfg.beltMaxCards);
+
+            // Giriş portalı = sahnedeki "GateSlot" objesi (kapının üst yarığı). Bulunamazsa
+            // doğrudan belt başına girilir (eski davranış).
+            entryPortal = gateRef != null && gateRef.transform.parent != null
+                ? gateRef.transform.parent.Find("GateSlot")
+                : null;
         }
 
         Material MatFor(CardColor color)
@@ -98,7 +105,7 @@ namespace CardFactory.Gameplay
             belt.Add(card);
         }
 
-        IEnumerator EnterCard(Card card, Vector3 entry, Vector3 origin, float delay)
+        IEnumerator EnterCard(Card card, Vector3 beltEntry, Vector3 origin, float delay)
         {
             if (delay > 0f) yield return new WaitForSeconds(delay);
             if (card == null) yield break;
@@ -106,19 +113,38 @@ namespace CardFactory.Gameplay
             card.transform.localScale = BeltCardScale;
             Juice.PopIn(card.transform, BeltCardScale, 0.12f);
 
-            const float dur = 0.5f, height = 3.2f;   // daha yüksekten gelen giriş yayı
+            if (entryPortal != null)
+            {
+                // Aşama A: desteden GateSlot'a (üst yarık) yay çizerek girer.
+                yield return ArcMove(card, origin, entryPortal.position, 1.1f, 0.34f);
+                if (card == null) yield break;
+                // Aşama B: yarıktan belt başına/ön ağza iner (makinenin içinden çıkmış gibi).
+                yield return ArcMove(card, entryPortal.position, beltEntry, 0.15f, 0.24f);
+            }
+            else
+            {
+                // Portal yoksa: doğrudan belt başına yüksek yayla gir (eski davranış).
+                yield return ArcMove(card, origin, beltEntry, 3.2f, 0.5f);
+            }
+
+            if (card != null) { card.transform.position = beltEntry; card.Entering = false; }
+        }
+
+        /// <summary>Kartı from→to parabolik yay ile taşır (height = tepe yüksekliği).</summary>
+        IEnumerator ArcMove(Card card, Vector3 from, Vector3 to, float height, float dur)
+        {
             float t = 0f;
             while (t < dur)
             {
                 t += Time.deltaTime;
                 if (card == null) yield break;
                 float k = Mathf.Clamp01(t / dur);
-                Vector3 p = Vector3.Lerp(origin, entry, Mathf.SmoothStep(0f, 1f, k));
-                p.y += height * 4f * k * (1f - k);   // havaya kalkıp düşen yay
+                Vector3 p = Vector3.Lerp(from, to, Mathf.SmoothStep(0f, 1f, k));
+                p.y += height * 4f * k * (1f - k);
                 card.transform.position = p;
                 yield return null;
             }
-            if (card != null) { card.transform.position = entry; card.Entering = false; }
+            if (card != null) card.transform.position = to;
         }
 
         void Update()
