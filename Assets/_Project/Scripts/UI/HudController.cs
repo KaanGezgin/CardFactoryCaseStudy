@@ -27,6 +27,9 @@ namespace CardFactory.UI
         Text bannerText;
         Text adSub;             // reklam alt yazısı ("Can you do it?" / "So satisfying!")
         Coroutine adPopCo;
+        bool adGlowOn;          // reklam fail'inde DockGlow (FailOfferGlow) göster
+        Image flashImg;         // tam ekran flaş (bant dolu/engellendi → kızarma)
+        Coroutine flashCo;
         GameObject nextButton;
         GameObject closeButton;
 
@@ -39,8 +42,7 @@ namespace CardFactory.UI
 
         public void Init()
         {
-            font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            font = LoadUiFont();
             roundedSprite = MakeRoundedSprite(64, 22);
 
             EnsureEventSystem();
@@ -52,8 +54,7 @@ namespace CardFactory.UI
 
         public void Rebind()
         {
-            font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (font == null) font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            font = LoadUiFont();
 
             var canvas = transform.Find("HUDCanvas");
             if (canvas != null)
@@ -72,9 +73,11 @@ namespace CardFactory.UI
                     if (adSub == null)
                     {
                         adSub = MakeText("AdSub", panel.transform, 64, TextAnchor.MiddleCenter,
-                            new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(900, 160));
+                            new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(900, 160));
                         adSub.color = Color.white;
                     }
+                    ApplyTextFx(bannerText);
+                    ApplyTextFx(adSub);
                     adSub.gameObject.SetActive(false);
                     WireButton(nextButton, () => GameManager.Instance?.NextLevel());
                     WireButton(closeButton, () => GameManager.Instance?.Restart());
@@ -152,10 +155,12 @@ namespace CardFactory.UI
             bannerText = MakeText("Banner", panel.transform, 100, TextAnchor.MiddleCenter,
                 new Vector2(0.5f, 0.5f), new Vector2(0, 220), new Vector2(820, 300));
             bannerText.color = Color.white;
+            ApplyTextFx(bannerText);
 
             adSub = MakeText("AdSub", panel.transform, 64, TextAnchor.MiddleCenter,
-                new Vector2(0.5f, 0.5f), new Vector2(0, 20), new Vector2(900, 160));
+                new Vector2(0.5f, 0.5f), new Vector2(0, 0), new Vector2(900, 160));
             adSub.color = Color.white;
+            ApplyTextFx(adSub);
             adSub.gameObject.SetActive(false);
 
             nextButton = MakeButton("NextBtn", panel.transform, "NEXT LEVEL", new Vector2(0, -260),
@@ -235,14 +240,16 @@ namespace CardFactory.UI
         /// REKLAM (AdDirector) için: mevcut yuvarlatılmış banner panelini kullanır. NEXT/X butonları
         /// gizli; alt yazı + tam ekran renk tint (kırmızı fail / yeşil success). Timing AdDirector'da.
         /// </summary>
-        public void ShowAdMessage(string banner, string sub, Color front, Color tint)
+        public void ShowAdMessage(string banner, string sub, Color front, Color tint,
+                                  bool showClose = false, bool failGlow = false)
         {
             if (panel == null) return;
             panel.SetActive(true);
             if (bannerText != null) bannerText.text = banner;
             if (bannerFront != null) bannerFront.color = front;
             if (nextButton != null) nextButton.SetActive(false);
-            if (closeButton != null) closeButton.SetActive(false);
+            if (closeButton != null) closeButton.SetActive(showClose);
+            adGlowOn = failGlow;
             if (adSub != null)
             {
                 adSub.text = sub;
@@ -256,9 +263,11 @@ namespace CardFactory.UI
         {
             if (adPopCo != null) { StopCoroutine(adPopCo); adPopCo = null; }
             SetBannerScale(1f);
+            adGlowOn = false;
             if (panel != null) panel.SetActive(false);
             if (endTint != null) endTint.color = new Color(0f, 0f, 0f, 0.22f);
             if (adSub != null) adSub.gameObject.SetActive(false);
+            if (failGlowGo != null) failGlowGo.SetActive(false);
         }
 
         /// <summary>Banner pop (geri-yaylı) + tint fade, sonra hafif nefes. Tamamen koddan efekt.</summary>
@@ -300,6 +309,69 @@ namespace CardFactory.UI
             const float c1 = 1.70158f, c3 = c1 + 1f;
             float p = k - 1f;
             return 1f + c3 * p * p * p + c1 * p * p;
+        }
+
+        /// <summary>
+        /// Özel font: `Assets/Resources/UIFont.ttf` (veya .otf) varsa onu kullan; yoksa builtin.
+        /// Hypercasual için Google Fonts: Fredoka / Lilita One / Luckiest Guy / Titan One / Baloo 2.
+        /// </summary>
+        static Font LoadUiFont()
+        {
+            var f = Resources.Load<Font>("UIFont");
+            if (f != null) return f;
+            f = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (f == null) f = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            return f;
+        }
+
+        /// <summary>Resimdeki gibi tıknaz görünüm: koyu kontur + yumuşak gölge (kodla, asset yok).</summary>
+        static void ApplyTextFx(Text t)
+        {
+            if (t == null || t.GetComponent<Outline>() != null) return;
+            var o = t.gameObject.AddComponent<Outline>();
+            o.effectColor = new Color(0.30f, 0.16f, 0.13f, 0.95f);
+            o.effectDistance = new Vector2(5f, -5f);
+            var sh = t.gameObject.AddComponent<Shadow>();
+            sh.effectColor = new Color(0f, 0f, 0f, 0.35f);
+            sh.effectDistance = new Vector2(0f, -8f);
+        }
+
+        /// <summary>Tam ekranı kısa süre renkle flaşlatır (bant dolu/engellendi geri bildirimi). Koddan.</summary>
+        public void FlashScreen(Color color, float duration)
+        {
+            EnsureFlash();
+            if (flashImg == null) return;
+            if (flashCo != null) StopCoroutine(flashCo);
+            flashCo = StartCoroutine(FlashRoutine(color, duration));
+        }
+
+        void EnsureFlash()
+        {
+            if (flashImg != null) return;
+            var canvas = transform.Find("HUDCanvas");
+            if (canvas == null) return;
+            var go = new GameObject("ScreenFlash");
+            go.transform.SetParent(canvas, false);
+            flashImg = go.AddComponent<Image>();
+            flashImg.raycastTarget = false;
+            var rt = flashImg.rectTransform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            flashImg.color = new Color(1f, 0f, 0f, 0f);
+        }
+
+        IEnumerator FlashRoutine(Color color, float duration)
+        {
+            flashImg.transform.SetAsLastSibling();
+            float t = 0f;
+            while (t < duration)
+            {
+                float k = 1f - t / duration;        // peak → 0
+                flashImg.color = new Color(color.r, color.g, color.b, color.a * k);
+                t += Time.deltaTime;
+                yield return null;
+            }
+            flashImg.color = new Color(color.r, color.g, color.b, 0f);
         }
 
         void WireButton(GameObject go, UnityAction action)
@@ -400,7 +472,7 @@ namespace CardFactory.UI
             rt.anchorMin = new Vector2(0f, 0.5f);
             rt.anchorMax = new Vector2(0f, 0.5f);
             rt.pivot = new Vector2(0f, 0.5f);
-            rt.anchoredPosition = new Vector2(90, -120);
+            rt.anchoredPosition = new Vector2(14f, -603.6f);
             rt.sizeDelta = new Vector2(160, 160);
 
             var btn = go.AddComponent<Button>();
@@ -416,7 +488,7 @@ namespace CardFactory.UI
             // Reklam modunda paneli AdDirector açıkça yönetir (ShowAdMessage); otomatik akışı atla.
             if (GameBootstrap.AdMode)
             {
-                if (failGlowGo != null && failGlowGo.activeSelf) failGlowGo.SetActive(false);
+                UpdateFailOfferGlow(adGlowOn);   // fail beat'inde DockGlow (donut) göster
                 return;
             }
 
@@ -425,7 +497,7 @@ namespace CardFactory.UI
 
             bool ended = gm.State == GameState.Won || gm.State == GameState.Lost;
             if (panel != null && panel.activeSelf != ended) panel.SetActive(ended);
-            UpdateFailOfferGlow(ended && gm.State == GameState.Lost);
+            UpdateFailOfferGlow(false);   // FailOfferGlow kapalı (beğenilmedi)
             if (!ended || panel == null) return;
 
             bool won = gm.State == GameState.Won;

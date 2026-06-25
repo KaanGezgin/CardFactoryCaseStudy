@@ -107,9 +107,12 @@ namespace CardFactory.Gameplay
 
             if (!conveyor.TrySend(group))
             {
+                // Bant dolu → gönderilemez: güçlü geri bildirim + ekran kızarması.
                 Sfx.Play("warn");
-                Juice.CameraPunch(0.18f);
+                Juice.CameraPunch(0.32f);
                 Sfx.Haptic();
+                var hud = Object.FindFirstObjectByType<CardFactory.UI.HudController>();
+                if (hud != null) hud.FlashScreen(new Color(1f, 0.16f, 0.13f, 0.34f), 0.3f);
                 return;
             }
 

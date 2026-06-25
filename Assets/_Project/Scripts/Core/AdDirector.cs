@@ -64,8 +64,9 @@ namespace CardFactory.Core
             // Beat 1 — Fail-bait: kazanılamaz board → dock dolar → gerçek LEVEL FAILED.
             yield return PlayCareless(35);
             yield return new WaitForSeconds(0.3f);
-            Sfx.Play("fail");
-            Hud()?.ShowAdMessage("LEVEL FAILED", "Can you do it?", FailFront, FailTint);
+            // Ses GameManager.OnDockFull'da çalıyor (tek sefer). Glow kapalı (beğenilmedi); X açık.
+            Hud()?.ShowAdMessage("LEVEL FAILED", "Can you do it?", FailFront, FailTint,
+                showClose: true);
             yield return new WaitForSeconds(1.9f);
             Hud()?.HideAdMessage();
 
@@ -79,7 +80,7 @@ namespace CardFactory.Core
             // Beat 2 — Success: doğru oyna → tüm kartlar biter (gerçek COMPLETE).
             yield return PlaySmart(40);
             yield return new WaitForSeconds(0.4f);
-            Sfx.Play("complete");
+            // Ses GameManager.Win'de çalıyor (tek sefer).
             Hud()?.ShowAdMessage("LEVEL COMPLETE", "Your turn — tap to play!", WinFront, WinTint);
             yield return new WaitForSeconds(2.0f);
 
@@ -92,15 +93,32 @@ namespace CardFactory.Core
         /// <summary>Fail oyun: aktif-OLMAYAN tepe grubunu gönder → dock'a gider → dolunca fail.</summary>
         IEnumerator PlayCareless(int maxTaps)
         {
+            bool shownBlocked = false;
             for (int i = 0; i < maxTaps; i++)
             {
                 var gm = GameManager.Instance;
                 if (gm != null && gm.State == GameState.Lost) yield break;   // dock doldu
+
+                // Bant DOLUYKEN bilerek 1-2 kez dene → "dolu, koyamıyor" görünsün (kırmızı flaş).
+                if (!shownBlocked && BeltCount() >= 19)
+                {
+                    var fs = FindWrongTopStack() ?? AnyNonEmptyStack();
+                    for (int k = 0; k < 2 && fs != null && !fs.IsEmpty; k++)
+                        yield return TapStack(fs, 0.8f);   // belt dolu → TrySend engeller → uyarı flaşı
+                    shownBlocked = true;
+                }
+
                 var s = FindWrongTopStack() ?? AnyNonEmptyStack();
                 if (s == null) break;
-                yield return TapStack(s, 0.4f);
+                yield return TapStack(s, 0.32f);
             }
             yield return WaitForLost(8f);   // gönderilen kartlar dock'a varıp doldursun
+        }
+
+        static int BeltCount()
+        {
+            var c = Object.FindFirstObjectByType<Conveyor>();
+            return c != null ? c.BeltCount : 0;
         }
 
         IEnumerator WaitForLost(float timeout)
