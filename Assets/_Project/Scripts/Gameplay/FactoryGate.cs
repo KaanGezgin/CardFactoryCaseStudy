@@ -19,12 +19,45 @@ namespace CardFactory.Gameplay
         GameConfig cfg;
         TextMesh label;
 
-        public void Init(Renderer gateRenderer, Color gateColor, GameConfig config, TextMesh counterLabel)
+        Transform progressFill;            // sayaç altı dolum çubuğu (sol kenardan büyür)
+        Renderer progressFillRend;
+        const float ProgressWidth = 0.88f; // anchor-local tam genişlik
+
+        public void Init(Renderer gateRenderer, Color gateColor, GameConfig config, TextMesh counterLabel,
+                         Transform progressBarFill = null)
         {
             body = gateRenderer;
             baseColor = gateColor;
             cfg = config;
             label = counterLabel;
+            BindProgress(progressBarFill);
+        }
+
+        void BindProgress(Transform fill)
+        {
+            progressFill = fill;
+            progressFillRend = fill != null ? fill.GetComponent<Renderer>() : null;
+            UpdateProgress(0f);
+        }
+
+        void UpdateProgress(float ratio)
+        {
+            if (progressFill == null) return;
+            ratio = Mathf.Clamp01(ratio);
+            float w = Mathf.Max(0.0008f, ratio * ProgressWidth);
+            var s = progressFill.localScale;
+            progressFill.localScale = new Vector3(w, s.y, s.z);
+            var p = progressFill.localPosition;
+            progressFill.localPosition = new Vector3(-ProgressWidth * 0.5f + w * 0.5f, p.y, p.z);
+
+            if (progressFillRend != null)
+            {
+                var c = ratio >= 0.9f ? new Color(0.95f, 0.3f, 0.3f)
+                      : ratio >= 0.7f ? new Color(1f, 0.78f, 0.3f)
+                      : new Color(0.32f, 0.82f, 0.45f);
+                progressFillRend.sharedMaterial.SetColor("_BaseColor", c);
+                progressFillRend.sharedMaterial.color = c;
+            }
         }
 
         /// <summary>
@@ -45,6 +78,9 @@ namespace CardFactory.Gameplay
                 var bb = anchor.GetComponent<CardFactory.Feedback.Billboard>();
                 if (bb != null) Destroy(bb);
             }
+            // Baked progress bar dolumunu yeniden bağla (varsa).
+            var prog = parent != null ? parent.Find("GateProgress") : null;
+            BindProgress(prog != null ? prog.Find("GateProgressFill") : null);
         }
 
         public void SetCount(int count, int max)
@@ -59,6 +95,7 @@ namespace CardFactory.Gameplay
                             : count >= max - 2 ? new Color(1f, 0.85f, 0.35f)
                             : Color.white;
             }
+            UpdateProgress(max > 0 ? (float)count / max : 0f);
         }
 
         /// <summary>Yeni level başlarken görseli sıfırlar (kapı kalıcı obje).</summary>
@@ -71,6 +108,7 @@ namespace CardFactory.Gameplay
                 body.sharedMaterial.SetColor("_BaseColor", baseColor);
                 body.sharedMaterial.color = baseColor;
             }
+            UpdateProgress(0f);
         }
 
         public void FlashWarning()

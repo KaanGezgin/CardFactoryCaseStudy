@@ -34,18 +34,20 @@ namespace CardFactory.Gameplay
         float barT;                // gösterilen dolum oranı (0..1), yumuşak lerp
         int shownFill;             // banda yansımış (inmiş) kart sayısı
 
-        Transform marker;          // üstte hedef-renk durum lambası
+        Transform marker;          // üstte hedef-renk durum küresi (lamba)
         Renderer markerRend;
         Renderer bodyRend;
+        Transform grooveRoot;      // segment yivleri (referans gibi rung'lar)
 
         const float BodyHeight = 1.35f;
         const float SlotFrontZ = -0.28f;
         const float LeanBack = 28f;     // konteyner hafif geriye yatar
+        const float LampSize = 0.22f;   // durum küresi çapı
 
         // Sürekli dolum barı geometrisi (slot yerine yükselen renk sütunu).
         const float FillBottomY = 0.16f;
         const float FillH = BodyHeight - 0.26f;   // doldurulabilir yükseklik
-        const float FillWidth = 0.68f;
+        const float FillWidth = 0.7f;
         const float FillDepth = 0.34f;
 
         public void Init(GameManager gameManager, BinManager manager, int slot, Vector3 pos)
@@ -109,12 +111,13 @@ namespace CardFactory.Gameplay
                 post.GetComponent<Renderer>().sharedMaterial = postMat;
             }
 
-            // Hedef-renk durum lambası — konteynerin üst önünde parlak panel.
-            var markerGo = ProcMesh.RoundedCube("ContainerLight");
+            // Hedef-renk durum lambası — üstte parlak KÜRE (referans gibi).
+            var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            markerGo.name = "ContainerLamp";
             DestroyCollider(markerGo);
             markerGo.transform.SetParent(transform, false);
-            markerGo.transform.localPosition = new Vector3(0f, BodyHeight + 0.02f, -0.22f);
-            markerGo.transform.localScale = new Vector3(0.36f, 0.14f, 0.08f);
+            markerGo.transform.localPosition = new Vector3(0f, BodyHeight + 0.18f, -0.06f);
+            markerGo.transform.localScale = Vector3.one * LampSize;
             markerRend = markerGo.GetComponent<Renderer>();
             marker = markerGo.transform;
 
@@ -142,6 +145,9 @@ namespace CardFactory.Gameplay
 
             var full = CardPalette.Get(color);
             fillMat = GameBootstrap.NewLitMaterial(full);
+            fillMat.SetFloat("_Smoothness", 0.62f);                 // parlak, doygun fill (referans)
+            fillMat.EnableKeyword("_EMISSION");
+            fillMat.SetColor("_EmissionColor", full * 0.35f);
             wellMat = GameBootstrap.NewLitMaterial(full * 0.28f);   // koyu boş kanal
             if (bodyRend != null)
             {
@@ -162,6 +168,7 @@ namespace CardFactory.Gameplay
             shownFill = 0;
             barT = 0f;
             UpdateBar(0f);
+            BuildGrooves(capacity);
 
             gameObject.SetActive(true);
             transform.localScale = Vector3.one;
@@ -176,11 +183,11 @@ namespace CardFactory.Gameplay
 
         void Update()
         {
-            // Durum lambası hafif nabız atar.
+            // Durum küresi hafif nabız atar.
             if (marker != null && Active)
             {
-                float p = 0.88f + Mathf.Sin(Time.time * 4.5f) * 0.12f;
-                marker.localScale = new Vector3(0.36f * p, 0.14f, 0.08f);
+                float p = 0.9f + Mathf.Sin(Time.time * 4.5f) * 0.1f;
+                marker.localScale = Vector3.one * (LampSize * p);
             }
 
             // Dolum barını hedef orana doğru yumuşak yükselt.
@@ -222,6 +229,30 @@ namespace CardFactory.Gameplay
             fillCapRend.sharedMaterial = capMat;
 
             UpdateBar(0f);
+        }
+
+        // Fill kanalı boyunca yatay segment yivleri (referanstaki rung'lar). Kapasiteye
+        // göre capacity-1 koyu çizgi → fill segmentli görünür. Configure'da yeniden kurulur.
+        void BuildGrooves(int capacity)
+        {
+            if (grooveRoot != null) Object.Destroy(grooveRoot.gameObject);
+            if (capacity < 2) return;
+
+            var rootGo = new GameObject("FillGrooves");
+            grooveRoot = rootGo.transform;
+            grooveRoot.SetParent(transform, false);
+
+            var grooveMat = GameBootstrap.NewLitMaterial(new UnityEngine.Color(0.05f, 0.06f, 0.08f));
+            for (int k = 1; k < capacity; k++)
+            {
+                float y = FillBottomY + (k / (float)capacity) * FillH;
+                var g = ProcMesh.RoundedCube("Groove_" + k);
+                DestroyCollider(g);
+                g.transform.SetParent(grooveRoot, false);
+                g.transform.localPosition = new Vector3(0f, y, SlotFrontZ - 0.015f);
+                g.transform.localScale = new Vector3(FillWidth + 0.02f, 0.03f, 0.05f);
+                g.GetComponent<Renderer>().sharedMaterial = grooveMat;
+            }
         }
 
         void UpdateBar(float t)

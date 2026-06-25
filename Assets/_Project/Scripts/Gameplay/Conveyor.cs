@@ -106,7 +106,7 @@ namespace CardFactory.Gameplay
             card.transform.localScale = BeltCardScale;
             Juice.PopIn(card.transform, BeltCardScale, 0.12f);
 
-            const float dur = 0.5f, height = 2.2f;
+            const float dur = 0.5f, height = 3.2f;   // daha yüksekten gelen giriş yayı
             float t = 0f;
             while (t < dur)
             {

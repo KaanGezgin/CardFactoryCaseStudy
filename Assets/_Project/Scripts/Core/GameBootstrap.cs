@@ -440,6 +440,36 @@ namespace CardFactory.Core
             var gateColor = new Color(0.24f, 0.28f, 0.48f);
             body.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(gateColor);
 
+            // Açık mavi üst gövde/trim (1. resimdeki açık üst kısım hissi).
+            var trim = ProcMesh.RoundedCube("GateTrim");
+            var tcol = trim.GetComponent<Collider>();
+            if (tcol != null) Object.Destroy(tcol);
+            trim.transform.SetParent(parent, false);
+            trim.transform.position = new Vector3(startPt.x, 1.27f, startPt.z);
+            trim.transform.localScale = new Vector3(2.04f, 0.18f, 0.99f);
+            trim.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.70f, 0.78f, 0.92f));
+
+            // Kart giriş ağzı (üstte): koyu yarık + 2 açık dudak (2 parça) → kartlar buradan girer.
+            var slot = ProcMesh.RoundedCube("GateSlot");
+            var slcol = slot.GetComponent<Collider>();
+            if (slcol != null) Object.Destroy(slcol);
+            slot.transform.SetParent(parent, false);
+            slot.transform.position = new Vector3(startPt.x, 1.4f, startPt.z);
+            slot.transform.localScale = new Vector3(1.42f, 0.14f, 0.32f);
+            slot.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.04f, 0.05f, 0.08f));
+
+            var lipMat = NewLitMaterial(new Color(0.82f, 0.88f, 0.97f));
+            for (int s = -1; s <= 1; s += 2)
+            {
+                var lip = ProcMesh.RoundedCube("GateLip");
+                var lcol = lip.GetComponent<Collider>();
+                if (lcol != null) Object.Destroy(lcol);
+                lip.transform.SetParent(parent, false);
+                lip.transform.position = new Vector3(startPt.x, 1.43f, startPt.z + s * 0.24f);
+                lip.transform.localScale = new Vector3(1.56f, 0.16f, 0.13f);
+                lip.GetComponent<Renderer>().sharedMaterial = lipMat;
+            }
+
             // Ekran (öne dönük, koyu) — sayaç UI'ı bunun üstüne oturur
             var screen = ProcMesh.RoundedCube("GateScreen");
             var scol = screen.GetComponent<Collider>();
@@ -462,7 +492,29 @@ namespace CardFactory.Core
             var counter = MakeWorldText("0/20", counterAnchor.transform, Vector3.zero,
                 0.07f, Color.white, 90);
 
-            gate.Init(body.GetComponent<Renderer>(), gateColor, config, counter);
+            // Sayaç altı ince progress bar: koyu track + sol-kenardan dolan renk çubuğu.
+            var progAnchor = new GameObject("GateProgress");
+            progAnchor.transform.SetParent(parent, false);
+            progAnchor.transform.position = screen.transform.position + new Vector3(0f, -0.16f, -0.16f);
+            progAnchor.transform.rotation = Quaternion.Euler(CameraPitch, 0f, 0f);
+
+            var track = ProcMesh.RoundedCube("GateProgressTrack");
+            var trcol = track.GetComponent<Collider>();
+            if (trcol != null) Object.Destroy(trcol);
+            track.transform.SetParent(progAnchor.transform, false);
+            track.transform.localPosition = Vector3.zero;
+            track.transform.localScale = new Vector3(0.96f, 0.07f, 0.05f);
+            track.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.04f, 0.05f, 0.08f));
+
+            var fill = ProcMesh.RoundedCube("GateProgressFill");
+            var fcol = fill.GetComponent<Collider>();
+            if (fcol != null) Object.Destroy(fcol);
+            fill.transform.SetParent(progAnchor.transform, false);
+            fill.transform.localPosition = new Vector3(-0.44f, 0f, -0.02f);
+            fill.transform.localScale = new Vector3(0.001f, 0.06f, 0.06f);
+            fill.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.32f, 0.82f, 0.45f));
+
+            gate.Init(body.GetComponent<Renderer>(), gateColor, config, counter, fill.transform);
             return gate;
         }
 
@@ -652,6 +704,39 @@ namespace CardFactory.Core
             go.transform.position = new Vector3(endPt.x, 0.45f, endPt.z);
             go.transform.localScale = new Vector3(1.7f, 0.9f, 0.95f);
             go.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.55f, 0.57f, 0.60f));
+
+            float frontZ = endPt.z - 0.42f;   // kameraya bakan ön yüz
+
+            // Koyu çıkış ağzı (recessed).
+            var mouth = ProcMesh.RoundedCube("ExitMouth");
+            var mcol = mouth.GetComponent<Collider>();
+            if (mcol != null) Object.Destroy(mcol);
+            mouth.transform.SetParent(parent, false);
+            mouth.transform.position = new Vector3(endPt.x, 0.4f, frontZ);
+            mouth.transform.localScale = new Vector3(1.28f, 0.52f, 0.16f);
+            mouth.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.06f, 0.07f, 0.09f));
+
+            // Beyaz dikey slatlar (chute hissi).
+            var slatMat = NewLitMaterial(new Color(0.88f, 0.90f, 0.93f));
+            for (int s = -2; s <= 2; s++)
+            {
+                var slat = ProcMesh.RoundedCube("ExitSlat");
+                var slcol = slat.GetComponent<Collider>();
+                if (slcol != null) Object.Destroy(slcol);
+                slat.transform.SetParent(parent, false);
+                slat.transform.position = new Vector3(endPt.x + s * 0.26f, 0.4f, frontZ - 0.04f);
+                slat.transform.localScale = new Vector3(0.1f, 0.48f, 0.06f);
+                slat.GetComponent<Renderer>().sharedMaterial = slatMat;
+            }
+
+            // Açık üst trim.
+            var capTrim = ProcMesh.RoundedCube("ExitTrim");
+            var ctcol = capTrim.GetComponent<Collider>();
+            if (ctcol != null) Object.Destroy(ctcol);
+            capTrim.transform.SetParent(parent, false);
+            capTrim.transform.position = new Vector3(endPt.x, 0.92f, endPt.z);
+            capTrim.transform.localScale = new Vector3(1.82f, 0.13f, 1.05f);
+            capTrim.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.68f, 0.70f, 0.74f));
         }
 
         // Desteleri (kartlar) stack anchor'larının ALTINA kurar; anchor konumu kullanılır.
@@ -832,13 +917,13 @@ namespace CardFactory.Core
 
         static Material GroundMaterial()
         {
-            var mat = NewLitMaterial(new Color(0.84f, 0.90f, 0.97f));
+            var mat = NewLitMaterial(new Color(0.88f, 0.93f, 0.99f));   // hafif daha aydınlık zemin
             var tex = MakeGridTexture();
             mat.SetTexture("_BaseMap", tex);
             mat.mainTexture = tex;
             mat.SetTextureScale("_BaseMap", new Vector2(7f, 7f));   // daha büyük, ferah hücreler
             mat.mainTextureScale = new Vector2(7f, 7f);
-            mat.SetFloat("_Smoothness", 0.15f);
+            mat.SetFloat("_Smoothness", 0.18f);
             return mat;
         }
 
@@ -847,8 +932,8 @@ namespace CardFactory.Core
             const int s = 64;
             const int lineW = 2;
             var tex = new Texture2D(s, s, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
-            var baseC = (Color32)new Color(0.84f, 0.90f, 0.97f);
-            var lineC = (Color32)new Color(0.77f, 0.85f, 0.94f);   // daha yumuşak çizgi
+            var baseC = (Color32)new Color(0.88f, 0.93f, 0.99f);
+            var lineC = (Color32)new Color(0.70f, 0.79f, 0.90f);   // biraz daha belirgin grid
             var px = new Color32[s * s];
             for (int y = 0; y < s; y++)
                 for (int x = 0; x < s; x++)
