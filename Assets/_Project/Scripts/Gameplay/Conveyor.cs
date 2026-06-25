@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using CardFactory.Core;
 using CardFactory.Data;
@@ -55,7 +56,7 @@ namespace CardFactory.Gameplay
             return m;
         }
 
-        public bool TrySend(List<CardColor> group)
+        public bool TrySend(List<CardColor> group, Vector3 origin)
         {
             if (belt.Count + group.Count > cfg.beltMaxCards)
             {
@@ -63,8 +64,8 @@ namespace CardFactory.Gameplay
                 return false;
             }
 
-            foreach (var color in group)
-                SpawnCard(color);
+            for (int k = 0; k < group.Count; k++)
+                SpawnCard(group[k], origin, k);
 
             gate.SetCount(belt.Count, cfg.beltMaxCards);
             Sfx.Play("send");
@@ -73,13 +74,13 @@ namespace CardFactory.Gameplay
 
         Vector3 WorldAt(float dist) => path.PointAt(dist) + Vector3.up * CardLift;
 
-        void SpawnCard(CardColor color)
+        void SpawnCard(CardColor color, Vector3 origin, int index)
         {
             var go = Feedback.ProcMesh.RoundedCube("Card_" + color);
             go.transform.SetParent(transform, true);
             var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col);
-            go.transform.localScale = BeltCardScale;
+            go.transform.localScale = Vector3.zero;   // sırası gelene kadar gizli
 
             var card = go.AddComponent<Card>();
             card.Setup(color, MatFor(color));
@@ -90,10 +91,34 @@ namespace CardFactory.Gameplay
                 if (c.BeltDist < backDist) backDist = c.BeltDist;
             card.BeltDist = belt.Count == 0 ? 0f : backDist - Spacing;
 
-            go.transform.position = WorldAt(card.BeltDist);
+            go.transform.position = origin;
+            card.Entering = true;
+            // Sırayla (staggered) havaya kalkıp bant BAŞINDAN (kapı) içeri gir.
+            StartCoroutine(EnterCard(card, WorldAt(0f), origin, index * 0.1f));
             belt.Add(card);
+        }
 
-            Juice.PopIn(go.transform, BeltCardScale, 0.15f);
+        IEnumerator EnterCard(Card card, Vector3 entry, Vector3 origin, float delay)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            if (card == null) yield break;
+
+            card.transform.localScale = BeltCardScale;
+            Juice.PopIn(card.transform, BeltCardScale, 0.12f);
+
+            const float dur = 0.5f, height = 2.2f;
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                if (card == null) yield break;
+                float k = Mathf.Clamp01(t / dur);
+                Vector3 p = Vector3.Lerp(origin, entry, Mathf.SmoothStep(0f, 1f, k));
+                p.y += height * 4f * k * (1f - k);   // havaya kalkıp düşen yay
+                card.transform.position = p;
+                yield return null;
+            }
+            if (card != null) { card.transform.position = entry; card.Entering = false; }
         }
 
         void Update()
@@ -106,6 +131,7 @@ namespace CardFactory.Gameplay
             for (int i = 0; i < belt.Count; i++)
             {
                 var card = belt[i];
+                if (card.Entering) continue;   // stack'ten süzülüyor; konumunu MoveArc sürer
                 float maxAllowed = (i == 0) ? endDist
                                             : Mathf.Min(endDist, belt[i - 1].BeltDist - Spacing);
                 float target = Mathf.Min(endDist, maxAllowed);
@@ -116,6 +142,7 @@ namespace CardFactory.Gameplay
             for (int i = belt.Count - 1; i >= 0; i--)
             {
                 var card = belt[i];
+                if (card.Entering) continue;   // giriş bitene kadar yakalanmaz/dock'a düşmez
                 var captor = bins.FindCaptor(card.Color, card.BeltDist);
                 if (captor != null)
                 {

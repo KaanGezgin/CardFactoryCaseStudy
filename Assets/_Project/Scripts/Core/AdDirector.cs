@@ -64,6 +64,8 @@ namespace CardFactory.Core
             // Beat 1 — Fail-bait: kazanılamaz board → dock dolar → gerçek LEVEL FAILED.
             yield return PlayCareless(35);
             yield return new WaitForSeconds(0.3f);
+            // Teklif widget'ı: "+4 slots / 400" → "New Dock / 1000".
+            Object.FindFirstObjectByType<Dock>()?.ShowFailOffer();
             // Ses GameManager.OnDockFull'da çalıyor (tek sefer). Glow kapalı (beğenilmedi); X açık.
             Hud()?.ShowAdMessage("LEVEL FAILED", "Can you do it?", FailFront, FailTint,
                 showClose: true);

@@ -17,6 +17,9 @@ namespace CardFactory.Gameplay
         public CardColor Color { get; private set; }
         public CardState State = CardState.Source;
 
+        /// <summary>true iken kart stack'ten banda süzülüyor; Conveyor onu henüz hareket ettirmez.</summary>
+        public bool Entering;
+
         /// <summary>Konveyör boyunca başlangıçtan uzaklık (birim). Conveyor yönetir.</summary>
         public float BeltDist;
 

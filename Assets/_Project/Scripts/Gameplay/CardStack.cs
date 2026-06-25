@@ -105,7 +105,12 @@ namespace CardFactory.Gameplay
             var group = new List<CardColor>(groupSize);
             for (int i = 0; i < groupSize; i++) group.Add(top);
 
-            if (!conveyor.TrySend(group))
+            // Kartlar bu konumdan (tepe kart) banda süzülür.
+            Vector3 origin = visuals.Count > 0
+                ? visuals[visuals.Count - 1].transform.position
+                : transform.position;
+
+            if (!conveyor.TrySend(group, origin))
             {
                 // Bant dolu → gönderilemez: güçlü geri bildirim + ekran kızarması.
                 Sfx.Play("warn");
