@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using CardFactory.Core;
 using CardFactory.Feedback;
@@ -22,6 +23,10 @@ namespace CardFactory.Gameplay
         GameManager gm;
         Vector3[] slots;
         float centerZ;
+
+        // Dock dizilimi (sol→sağ). Renge göre gruplanır: gelen kart aynı renk grubunun
+        // sağına girer, sağdaki kartlar bir slot kayar.
+        readonly List<Card> placed = new();
 
         TextMesh offerLabel;
         TextMesh offerAmount;
@@ -307,6 +312,7 @@ namespace CardFactory.Gameplay
             Capacity = slotList.Count;
             Count = 0;
             failShown = false;
+            placed.Clear();
 
             var offer = transform.Find("DockOffer");
             if (offer != null)
@@ -349,6 +355,7 @@ namespace CardFactory.Gameplay
         {
             Count = 0;
             failShown = false;
+            placed.Clear();
 
             if (slotPockets != null)
                 foreach (var p in slotPockets)
@@ -408,23 +415,40 @@ namespace CardFactory.Gameplay
 
         public void Receive(Card card)
         {
+            if (card == null) return;
             if (Count >= Capacity)
             {
-                if (card != null) Object.Destroy(card.gameObject);
+                Object.Destroy(card.gameObject);
                 return;
             }
 
-            int idx = Count;
-            Vector3 target = slots[idx];
-            Count++;
+            // Ekleme yeri: aynı renkteki son kartın HEMEN SAĞINA; o renk yoksa en sona.
+            int insertion = placed.Count;
+            for (int i = placed.Count - 1; i >= 0; i--)
+                if (placed[i] != null && placed[i].Color == card.Color) { insertion = i + 1; break; }
+
+            // insertion'dan sağdaki kartlar bir slot sağa kayar (hafif yükselip, kademeli).
+            for (int i = placed.Count - 1; i >= insertion; i--)
+            {
+                var c = placed[i];
+                if (c == null) continue;
+                float delay = (i - insertion) * 0.04f;
+                StartCoroutine(ShiftCard(c, slots[i + 1], delay));
+            }
+
+            placed.Insert(insertion, card);
+            Count = placed.Count;
             card.State = CardState.Dock;
 
-            if (slotPockets != null && idx < slotPockets.Length && slotPockets[idx] != null)
-                slotPockets[idx].enabled = false;
+            // Sağ uçta yeni dolan slotun pocket'ını gizle (dolu bölge daima 0..Count-1).
+            int lastIdx = Count - 1;
+            if (slotPockets != null && lastIdx < slotPockets.Length && slotPockets[lastIdx] != null)
+                slotPockets[lastIdx].enabled = false;
 
             card.transform.localScale = DockCardScale;
             card.transform.rotation = DockCardRot;
-            // Bant sonundan dock'a UÇARAK konar (yay).
+            // Bant sonundan, grubunun yanındaki slota UÇARAK konar (yay).
+            Vector3 target = slots[insertion];
             card.MoveArc(target, 1.3f, 0.42f, () =>
             {
                 if (card != null)
@@ -437,6 +461,17 @@ namespace CardFactory.Gameplay
 
             if (Count >= Capacity && gm != null)
                 gm.OnDockFull();
+        }
+
+        /// <summary>Var olan dock kartını, hafif yükselip yeni slotuna kaydırır (kademeli gecikme).</summary>
+        IEnumerator ShiftCard(Card card, Vector3 target, float delay)
+        {
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+            if (card == null) yield break;
+            card.MoveArc(target, 0.35f, 0.26f, () =>
+            {
+                if (card != null) card.transform.rotation = DockCardRot;
+            });
         }
     }
 }
