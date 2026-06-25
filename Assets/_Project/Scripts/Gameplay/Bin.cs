@@ -26,9 +26,13 @@ namespace CardFactory.Gameplay
         int inFlight;
         int landed;
 
-        Renderer[] slotRends;
-        Material emptyMat;
-        Material fillMat;
+        Material fillMat;          // hedef renk (dolan bar)
+        Material wellMat;          // boş kanal (koyu)
+
+        Transform fillBar, fillCap, well;
+        Renderer fillBarRend, fillCapRend, wellRend;
+        float barT;                // gösterilen dolum oranı (0..1), yumuşak lerp
+        int shownFill;             // banda yansımış (inmiş) kart sayısı
 
         Transform marker;          // üstte hedef-renk durum lambası
         Renderer markerRend;
@@ -37,6 +41,12 @@ namespace CardFactory.Gameplay
         const float BodyHeight = 1.35f;
         const float SlotFrontZ = -0.28f;
         const float LeanBack = 28f;     // konteyner hafif geriye yatar
+
+        // Sürekli dolum barı geometrisi (slot yerine yükselen renk sütunu).
+        const float FillBottomY = 0.16f;
+        const float FillH = BodyHeight - 0.26f;   // doldurulabilir yükseklik
+        const float FillWidth = 0.68f;
+        const float FillDepth = 0.34f;
 
         public void Init(GameManager gameManager, BinManager manager, int slot, Vector3 pos)
         {
@@ -107,6 +117,12 @@ namespace CardFactory.Gameplay
             markerGo.transform.localScale = new Vector3(0.36f, 0.14f, 0.08f);
             markerRend = markerGo.GetComponent<Renderer>();
             marker = markerGo.transform;
+
+            BuildFillColumn();
+
+            // Zemin kontakt gölgesi (yumuşak AO hissi). Konteyner eğik durduğundan
+            // gölge world-space'te flat tutulur (SpawnContactShadow world rotasyon ayarlar).
+            GameBootstrap.SpawnContactShadow(transform, new Vector3(pos.x, 0.04f, pos.z + 0.12f), 1.25f, 1.25f);
         }
 
         static void DestroyCollider(GameObject go)
@@ -126,7 +142,7 @@ namespace CardFactory.Gameplay
 
             var full = CardPalette.Get(color);
             fillMat = GameBootstrap.NewLitMaterial(full);
-            emptyMat = GameBootstrap.NewLitMaterial(full * 0.45f);
+            wellMat = GameBootstrap.NewLitMaterial(full * 0.28f);   // koyu boş kanal
             if (bodyRend != null)
             {
                 var shell = GameBootstrap.NewLitMaterial(UnityEngine.Color.Lerp(full * 0.35f, new UnityEngine.Color(0.12f, 0.13f, 0.15f), 0.55f));
@@ -140,7 +156,12 @@ namespace CardFactory.Gameplay
                 markerRend.sharedMaterial = lightMat;
             }
 
-            BuildSlots(capacity);
+            // Bar/kanal renklendir + sıfırla.
+            if (wellRend != null) wellRend.sharedMaterial = wellMat;
+            if (fillBarRend != null) fillBarRend.sharedMaterial = fillMat;
+            shownFill = 0;
+            barT = 0f;
+            UpdateBar(0f);
 
             gameObject.SetActive(true);
             transform.localScale = Vector3.one;
@@ -161,33 +182,70 @@ namespace CardFactory.Gameplay
                 float p = 0.88f + Mathf.Sin(Time.time * 4.5f) * 0.12f;
                 marker.localScale = new Vector3(0.36f * p, 0.14f, 0.08f);
             }
+
+            // Dolum barını hedef orana doğru yumuşak yükselt.
+            if (fillBar != null && Capacity > 0)
+            {
+                float targetT = (float)shownFill / Capacity;
+                if (Mathf.Abs(barT - targetT) > 0.0005f)
+                {
+                    barT = Mathf.MoveTowards(barT, targetT, Time.deltaTime * 2.5f);
+                    UpdateBar(barT);
+                }
+            }
         }
 
-        void BuildSlots(int capacity)
+        // Slot dizisi yerine: koyu boş kanal + yükselen renk barı + parlak kapak.
+        void BuildFillColumn()
         {
-            if (slotRends != null)
-                foreach (var r in slotRends)
-                    if (r != null) Object.Destroy(r.gameObject);
+            var wellGo = ProcMesh.RoundedCube("FillWell");
+            DestroyCollider(wellGo);
+            wellGo.transform.SetParent(transform, false);
+            wellGo.transform.localPosition = new Vector3(0f, FillBottomY + FillH * 0.5f, SlotFrontZ + 0.03f);
+            wellGo.transform.localScale = new Vector3(FillWidth + 0.04f, FillH, FillDepth * 0.7f);
+            wellRend = wellGo.GetComponent<Renderer>();
 
-            slotRends = new Renderer[capacity];
-            float slotH = BodyHeight / capacity;
-            for (int i = 0; i < capacity; i++)
+            var barGo = ProcMesh.RoundedCube("FillBar");
+            DestroyCollider(barGo);
+            barGo.transform.SetParent(transform, false);
+            fillBar = barGo.transform;
+            fillBarRend = barGo.GetComponent<Renderer>();
+
+            var capGo = ProcMesh.RoundedCube("FillCap");
+            DestroyCollider(capGo);
+            capGo.transform.SetParent(transform, false);
+            capGo.transform.localScale = new Vector3(FillWidth + 0.05f, 0.06f, FillDepth + 0.03f);
+            fillCap = capGo.transform;
+            fillCapRend = capGo.GetComponent<Renderer>();
+            var capMat = GameBootstrap.NewLitMaterial(new UnityEngine.Color(0.96f, 0.97f, 1f));
+            capMat.SetFloat("_Smoothness", 0.85f);   // glossy beyaz kapak
+            fillCapRend.sharedMaterial = capMat;
+
+            UpdateBar(0f);
+        }
+
+        void UpdateBar(float t)
+        {
+            t = Mathf.Clamp01(t);
+            float h = Mathf.Max(0.0001f, t * FillH);
+            if (fillBar != null)
             {
-                var go = ProcMesh.RoundedCube("Slot_" + i);
-                DestroyCollider(go);
-                go.transform.SetParent(transform, false);
-                go.transform.localPosition = new Vector3(0f, (i + 0.5f) * slotH, SlotFrontZ);
-                go.transform.localScale = new Vector3(0.82f, slotH * 0.82f, 0.34f);
-                var rend = go.GetComponent<Renderer>();
-                rend.sharedMaterial = emptyMat;
-                slotRends[i] = rend;
+                fillBar.localScale = new Vector3(FillWidth, h, FillDepth);
+                fillBar.localPosition = new Vector3(0f, FillBottomY + h * 0.5f, SlotFrontZ);
+                fillBar.gameObject.SetActive(t > 0.001f);
+            }
+            if (fillCap != null)
+            {
+                fillCap.localPosition = new Vector3(0f, FillBottomY + h, SlotFrontZ - 0.01f);
+                fillCap.gameObject.SetActive(t > 0.001f);
             }
         }
 
         Vector3 SlotWorldPos(int idx)
         {
-            float slotH = BodyHeight / Capacity;
-            return transform.TransformPoint(new Vector3(0f, (idx + 0.5f) * slotH, SlotFrontZ));
+            float frac = Capacity > 0 ? (idx + 1f) / Capacity : 0f;
+            float y = FillBottomY + frac * FillH;
+            return transform.TransformPoint(new Vector3(0f, y, SlotFrontZ));
         }
 
         public void Accept(Card card)
@@ -204,7 +262,7 @@ namespace CardFactory.Gameplay
                 if (card != null) Object.Destroy(card.gameObject);
                 inFlight--;
                 landed++;
-                FillSlot(idx);
+                FillSlot();
                 Juice.PunchScale(transform, Vector3.one, 0.05f, 0.1f);
                 Sfx.Play("fill");
                 if (gm != null) gm.OnCardShipped();
@@ -217,14 +275,12 @@ namespace CardFactory.Gameplay
             });
         }
 
-        void FillSlot(int idx)
+        void FillSlot()
         {
-            if (slotRends != null && idx >= 0 && idx < slotRends.Length && slotRends[idx] != null)
-            {
-                slotRends[idx].sharedMaterial = fillMat;
-                Juice.PunchScale(slotRends[idx].transform,
-                    slotRends[idx].transform.localScale, 0.25f, 0.12f);
-            }
+            shownFill = Mathf.Min(Capacity, shownFill + 1);
+            // Kapakta tatmin edici "doluyor" vuruşu.
+            if (fillCap != null)
+                Juice.PunchScale(fillCap, fillCap.localScale, 0.2f, 0.12f);
         }
 
         void Ship()

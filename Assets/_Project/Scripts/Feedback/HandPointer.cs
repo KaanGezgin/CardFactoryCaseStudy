@@ -112,15 +112,15 @@ namespace CardFactory.Feedback
 
             // Parmak: 3 segment (kullanıcı Inspector ayarları). Seg2 = Seg1↔Seg3 arası.
             var seg1 = ProcMesh.RoundedCube("FingerSeg1");
-            SetupPart(seg1, handRoot, new Vector3(0.06f, 0.028f, 0.369f),
+            SetupPart(seg1, handRoot, new Vector3(-0.075f, 0.028f, 0.369f),
                 new Vector3(0.13f, 0.13f, 0.24f), Quaternion.Euler(6.087f, 0f, 0f));
 
             var seg2 = ProcMesh.RoundedCube("FingerSeg2");
-            SetupPart(seg2, handRoot, new Vector3(0.06f, 0.011f, 0.564f),
+            SetupPart(seg2, handRoot, new Vector3(-0.075f, 0.011f, 0.564f),
                 new Vector3(0.11f, 0.11f, 0.22f), Quaternion.Euler(10.242f, 0f, 0f));
 
             var seg3 = ProcMesh.RoundedCube("FingerSeg3");
-            SetupPart(seg3, handRoot, new Vector3(0.06f, -0.032f, 0.722f),
+            SetupPart(seg3, handRoot, new Vector3(-0.075f, -0.032f, 0.722f),
                 new Vector3(0.105f, 0.105f, 0.22f), Quaternion.Euler(24f, 0f, 0f));
 
             fingerTip = seg3.transform;                 // tık basışı için uç segment

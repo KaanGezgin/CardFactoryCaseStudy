@@ -22,7 +22,7 @@ namespace CardFactory.Gameplay
 
         const int MaxVisible = 12;    // elde 16'ya kadar olsa da en fazla 12 kart görünür
         const float CardW = 0.85f;
-        const float CardThick = 0.07f;
+        const float CardThick = 0.1f;     // daha tok kart (yandan kalınlık görünür)
         const float CardLen = 0.95f;
         const float TiltX = -20f;     // neredeyse yere yatık (kuş bakışı)
         const float StepY = 0.032f;   // 20 kart sığsın diye sıkı
@@ -127,6 +127,13 @@ namespace CardFactory.Gameplay
 
             cards.RemoveRange(cards.Count - groupSize, groupSize);
             RefreshVisuals();
+
+            // Açığa çıkan yeni üst kart tatmin edici şekilde "pop" yapar.
+            if (visuals.Count > 0)
+            {
+                var topT = visuals[visuals.Count - 1].transform;
+                Juice.PopIn(topT, topT.localScale, 0.16f);
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CardFactory.Core;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -40,11 +41,48 @@ namespace CardFactory.EditorTools
         [MenuItem("Tools/Card Factory/Bake World Into Scene")]
         public static void Bake()
         {
+            // Kod değişikliğini sahneye kalıcı işlemenin DOĞRU yolu (edit mode).
+            // Dünya sıfırdan kurulur; manuel anchor yerleşimi (StackAnchor_*/BinAnchor_*)
+            // korunur ki re-bake düzeni bozmasın. Sıfırdan kod-default düzen istiyorsan
+            // önce "Clear Baked World" çalıştır, sonra bunu.
+            var layout = CaptureAnchorLayout();
             var world = GameBootstrap.BakeWorld();
+            int restored = RestoreAnchorLayout(world, layout);
             EditorSceneManager.MarkSceneDirty(world.scene);
             Selection.activeGameObject = world;
-            Debug.Log("[CardFactory] Kalıcı ortam sahneye kuruldu. Sahneyi KAYDET (Ctrl+S) " +
-                      "ki Play oturumları arasında kalsın.");
+            Debug.Log($"[CardFactory] Kalıcı ortam sahneye kuruldu (anchor korundu: {restored}). " +
+                      "Sahneyi KAYDET (Ctrl+S) ki Play oturumları arasında kalsın.");
+        }
+
+        /// <summary>Mevcut dünyadaki anchor (kart/kutu yerleşim) transformlarını ada göre yakalar.</summary>
+        static Dictionary<string, (Vector3 pos, Quaternion rot)> CaptureAnchorLayout()
+        {
+            var map = new Dictionary<string, (Vector3, Quaternion)>();
+            var existing = GameObject.Find("CardFactoryWorld");
+            if (existing == null) return map;
+            foreach (var t in existing.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name.StartsWith("StackAnchor_") || t.name.StartsWith("BinAnchor_"))
+                    map[t.name] = (t.localPosition, t.localRotation);
+            }
+            return map;
+        }
+
+        /// <summary>Yakalanan anchor yerleşimini yeni kurulan dünyaya geri uygular.</summary>
+        static int RestoreAnchorLayout(GameObject world, Dictionary<string, (Vector3 pos, Quaternion rot)> map)
+        {
+            if (map == null || map.Count == 0) return 0;
+            int n = 0;
+            foreach (var t in world.GetComponentsInChildren<Transform>(true))
+            {
+                if (map.TryGetValue(t.name, out var v))
+                {
+                    t.localPosition = v.pos;
+                    t.localRotation = v.rot;
+                    n++;
+                }
+            }
+            return n;
         }
 
         [MenuItem("Tools/Card Factory/Clear Baked World")]

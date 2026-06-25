@@ -339,16 +339,16 @@ namespace CardFactory.Core
             return pts;
         }
 
-        const float BeltWidth = 1.6f;
+        const float BeltWidth = 1.85f;
 
         static void BuildBeltVisual(Transform parent, List<Vector3> pts)
         {
             var beltRoot = new GameObject("Belt");
             beltRoot.transform.SetParent(parent, false);
 
-            var surfaceMat = NewLitMaterial(new Color(0.33f, 0.39f, 0.49f));
-            var railMat = NewLitMaterial(new Color(0.56f, 0.61f, 0.70f));
-            const float railW = 0.16f;
+            var surfaceMat = NewLitMaterial(new Color(0.30f, 0.36f, 0.46f));
+            var railMat = NewLitMaterial(new Color(0.66f, 0.72f, 0.82f));
+            const float railW = 0.2f;
 
             for (int i = 0; i < pts.Count - 1; i++)
             {
@@ -394,18 +394,18 @@ namespace CardFactory.Core
 
         static void BuildBeltChevrons(Transform beltRoot, List<Vector3> pts)
         {
-            var chevMat = NewLitMaterial(new Color(0.72f, 0.78f, 0.88f));
+            var chevMat = NewGlowMaterial(new Color(0.90f, 0.94f, 1f, 1f));   // hafif parlak → bant kimliği belirgin
             var flowGo = new GameObject("BeltFlow");
             flowGo.transform.SetParent(beltRoot, false);
             var flow = flowGo.AddComponent<BeltFlow>();
 
             var p = new BeltPath(pts);
-            int count = Mathf.Max(6, Mathf.RoundToInt(p.Length / 1.0f));
+            int count = Mathf.Max(8, Mathf.RoundToInt(p.Length / 0.8f));
             var chevrons = new Transform[count];
             for (int i = 0; i < count; i++)
                 chevrons[i] = BuildChevron(flowGo.transform, chevMat);
 
-            flow.Setup(pts.ToArray(), chevrons, 1.4f, 0.17f);
+            flow.Setup(pts.ToArray(), chevrons, 2.2f, 0.17f);
         }
 
         static Transform BuildChevron(Transform parent, Material mat)
@@ -419,9 +419,9 @@ namespace CardFactory.Core
                 var col = arm.GetComponent<Collider>();
                 if (col != null) Object.Destroy(col);
                 arm.transform.SetParent(root.transform, false);
-                arm.transform.localPosition = new Vector3(s * 0.16f, 0f, -0.07f);
+                arm.transform.localPosition = new Vector3(s * 0.18f, 0f, -0.08f);
                 arm.transform.localRotation = Quaternion.Euler(0f, -s * 32f, 0f);
-                arm.transform.localScale = new Vector3(0.07f, 0.05f, 0.5f);
+                arm.transform.localScale = new Vector3(0.09f, 0.06f, 0.6f);
                 arm.GetComponent<Renderer>().sharedMaterial = mat;
             }
             return root.transform;
@@ -558,6 +558,91 @@ namespace CardFactory.Core
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
+        // ---- Kontakt gölge (yumuşak AO hissi) -------------------------------
+        static Texture2D blobTex;
+        /// <summary>Merkezde opak, kenarda şeffaf yumuşak siyah blob — kontakt gölge dokusu.</summary>
+        static Texture2D MakeBlobTexture(int size = 128)
+        {
+            if (blobTex != null) return blobTex;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp };
+            float c = (size - 1) * 0.5f;
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
+                    float a = Mathf.Clamp01(1f - d);
+                    a *= a;                       // yumuşak, yerel düşüş
+                    px[y * size + x] = new Color(0f, 0f, 0f, a);
+                }
+            tex.SetPixels32(px);
+            tex.Apply();
+            blobTex = tex;
+            return tex;
+        }
+
+        static Material blobMat;
+        static Material BlobMaterial()
+        {
+            if (blobMat != null) return blobMat;
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Unlit/Transparent");
+            var m = new Material(shader);
+            var t = MakeBlobTexture();
+            m.SetTexture("_BaseMap", t);
+            m.mainTexture = t;
+            m.SetColor("_BaseColor", new Color(0f, 0f, 0f, 0.34f));
+            m.SetFloat("_Surface", 1f);          // transparent
+            m.SetFloat("_Blend", 0f);            // alpha blend
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.renderQueue = 2990;                // zeminden sonra, kartlardan önce
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            blobMat = m;
+            return m;
+        }
+
+        /// <summary>
+        /// Zemine yatık yumuşak kontakt gölge quad'ı oluşturur (üst yüzü kameraya bakar).
+        /// Bin gibi eğik/parented objelerde de world rotasyon flat tutulur.
+        /// </summary>
+        public static Transform SpawnContactShadow(Transform parent, Vector3 worldPos,
+                                                   float sizeX, float sizeZ, float y = 0.03f)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = "ContactShadow";
+            var col = go.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            go.transform.SetParent(parent, false);
+            go.transform.position = new Vector3(worldPos.x, y, worldPos.z);
+            go.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);   // zemine yat, normal +Y
+            go.transform.localScale = new Vector3(sizeX, sizeZ, 1f);
+            var r = go.GetComponent<Renderer>();
+            r.sharedMaterial = BlobMaterial();
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            return go.transform;
+        }
+
+        /// <summary>
+        /// Kalıcı dünya objelerine (kapı, end-cap) kontakt gölge ekler. Idempotent:
+        /// "GroundShadows" kökü varsa atlar → reuse'da da bir kez kurulur.
+        /// </summary>
+        static void EnsureGroundShadows(GameObject world)
+        {
+            if (world.transform.Find("GroundShadows") != null) return;
+            var root = new GameObject("GroundShadows");
+            root.transform.SetParent(world.transform, false);
+
+            var gateT = world.transform.Find("FactoryGate");
+            if (gateT != null) SpawnContactShadow(root.transform, gateT.position, 2.5f, 1.5f);
+
+            var endT = world.transform.Find("BeltEndCap");
+            if (endT != null) SpawnContactShadow(root.transform, endT.position, 2.1f, 1.4f);
+        }
+
         static void BuildEndCap(Transform parent, Vector3 endPt)
         {
             var go = ProcMesh.RoundedCube("BeltEndCap");
@@ -583,6 +668,8 @@ namespace CardFactory.Core
                 go.transform.SetParent(anchor, false);
                 var stack = go.AddComponent<CardStack>();
                 stack.Init(level.stacks[i], anchor.position, conveyor);
+                // Destenin zemine kontakt gölgesi (stack ile birlikte temizlenir).
+                SpawnContactShadow(go.transform, anchor.position, 1.3f, 1.6f);
                 result.Add(stack);
             }
             return result;
@@ -676,6 +763,9 @@ namespace CardFactory.Core
             // Çevre süsleri (köşe sandıklar + uyarı bandı) — yoksa kurulur (reuse'da da).
             EnsureDecor(world);
 
+            // Kalıcı objelerin zemin kontakt gölgeleri (idempotent).
+            EnsureGroundShadows(world);
+
             // Grid zemin
             var ground = world.transform.Find("Ground");
             if (ground != null)
@@ -720,9 +810,9 @@ namespace CardFactory.Core
 
             var bloom = profile.Add<Bloom>();
             bloom.active = true;
-            bloom.intensity.Override(0.5f);
-            bloom.threshold.Override(0.95f);
-            bloom.scatter.Override(0.6f);
+            bloom.intensity.Override(0.65f);
+            bloom.threshold.Override(0.82f);   // highlight'lar (chevron/parlak yüzey) parlasın
+            bloom.scatter.Override(0.65f);
 
             var vig = profile.Add<Vignette>();
             vig.active = true;
@@ -731,9 +821,9 @@ namespace CardFactory.Core
 
             var ca = profile.Add<ColorAdjustments>();
             ca.active = true;
-            ca.saturation.Override(18f);
-            ca.contrast.Override(8f);
-            ca.postExposure.Override(0.05f);
+            ca.saturation.Override(26f);
+            ca.contrast.Override(12f);
+            ca.postExposure.Override(0.06f);
 
             var tone = profile.Add<Tonemapping>();
             tone.active = true;
@@ -848,6 +938,7 @@ namespace CardFactory.Core
                 crate.transform.localScale = Vector3.one * 1.3f;
                 crate.transform.localRotation = Quaternion.Euler(0f, crateYaw[i], 0f);
                 crate.GetComponent<Renderer>().sharedMaterial = crateMat;
+                SpawnContactShadow(decor.transform, cratePos[i], 1.9f, 1.9f);
             }
 
             BuildWarningTape(decor.transform);
