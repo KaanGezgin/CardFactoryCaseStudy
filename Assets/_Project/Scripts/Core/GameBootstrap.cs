@@ -429,86 +429,112 @@ namespace CardFactory.Core
 
         static FactoryGate BuildGate(Transform parent, GameConfig config, Vector3 startPt)
         {
-            // Makine gövdesi
-            var body = ProcMesh.RoundedCube("FactoryGate");
-            var col = body.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
-            body.transform.SetParent(parent, false);
-            body.transform.position = new Vector3(startPt.x, 0.6f, startPt.z);
-            body.transform.localScale = new Vector3(1.9f, 1.2f, 0.85f);
-
+            // Gövde belt başının ARKASINDA durur; ön yüzü ≈ belt başı. Kartlar ön
+            // yüzdeki AĞIZDAN çıkar (içinden geçmez). Büyütüldü → sayaç kartların üstünde kalır.
+            const float depth = 1.05f, bodyH = 1.95f;
+            // Gövde, kart doğum noktasının (startPt.z) ön yüzü onun hemen ARKASINA gelecek
+            // şekilde durur → kart ağzın içinden çıkmış gibi görünür (önünde takılı kalmaz).
+            float gateZ = startPt.z + 0.5f;
+            float frontZ = gateZ - depth * 0.5f;     // ön yüz (kart doğum noktasının hemen arkası)
             var gateColor = new Color(0.24f, 0.28f, 0.48f);
+
+            var body = ProcMesh.RoundedCube("FactoryGate");
+            DestroyColliderGO(body);
+            body.transform.SetParent(parent, false);
+            body.transform.position = new Vector3(startPt.x, bodyH * 0.5f, gateZ);
+            body.transform.localScale = new Vector3(2.15f, bodyH, depth);
             body.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(gateColor);
 
-            // Açık mavi üst gövde/trim (1. resimdeki açık üst kısım hissi).
+            // Açık mavi üst trim
             var trim = ProcMesh.RoundedCube("GateTrim");
-            var tcol = trim.GetComponent<Collider>();
-            if (tcol != null) Object.Destroy(tcol);
+            DestroyColliderGO(trim);
             trim.transform.SetParent(parent, false);
-            trim.transform.position = new Vector3(startPt.x, 1.27f, startPt.z);
-            trim.transform.localScale = new Vector3(2.04f, 0.18f, 0.99f);
+            trim.transform.position = new Vector3(startPt.x, bodyH + 0.04f, gateZ);
+            trim.transform.localScale = new Vector3(2.28f, 0.2f, depth + 0.12f);
             trim.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.70f, 0.78f, 0.92f));
 
-            // Kart giriş ağzı (üstte): koyu yarık + 2 açık dudak (2 parça) → kartlar buradan girer.
+            // Üst kart giriş ağzı (dekoratif): koyu yarık + 2 açık dudak.
             var slot = ProcMesh.RoundedCube("GateSlot");
-            var slcol = slot.GetComponent<Collider>();
-            if (slcol != null) Object.Destroy(slcol);
+            DestroyColliderGO(slot);
             slot.transform.SetParent(parent, false);
-            slot.transform.position = new Vector3(startPt.x, 1.4f, startPt.z);
-            slot.transform.localScale = new Vector3(1.42f, 0.14f, 0.32f);
+            slot.transform.position = new Vector3(startPt.x, bodyH + 0.16f, gateZ);
+            slot.transform.localScale = new Vector3(1.5f, 0.14f, 0.34f);
             slot.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.04f, 0.05f, 0.08f));
 
             var lipMat = NewLitMaterial(new Color(0.82f, 0.88f, 0.97f));
             for (int s = -1; s <= 1; s += 2)
             {
                 var lip = ProcMesh.RoundedCube("GateLip");
-                var lcol = lip.GetComponent<Collider>();
-                if (lcol != null) Object.Destroy(lcol);
+                DestroyColliderGO(lip);
                 lip.transform.SetParent(parent, false);
-                lip.transform.position = new Vector3(startPt.x, 1.43f, startPt.z + s * 0.24f);
-                lip.transform.localScale = new Vector3(1.56f, 0.16f, 0.13f);
+                lip.transform.position = new Vector3(startPt.x, bodyH + 0.19f, gateZ + s * 0.26f);
+                lip.transform.localScale = new Vector3(1.64f, 0.16f, 0.14f);
                 lip.GetComponent<Renderer>().sharedMaterial = lipMat;
             }
 
-            // Ekran (öne dönük, koyu) — sayaç UI'ı bunun üstüne oturur
+            // ÖN ÇIKIŞ AĞZI — kartın DOĞDUĞU noktaya (startPt.z) hizalı: koyu yuva kartı
+            // çerçeveler, kart bu ağzın içinden öne (−z) doğru çıkar.
+            float mouthZ = startPt.z;
+            var mouth = ProcMesh.RoundedCube("GateMouth");
+            DestroyColliderGO(mouth);
+            mouth.transform.SetParent(parent, false);
+            mouth.transform.position = new Vector3(startPt.x, 0.5f, mouthZ);
+            mouth.transform.localScale = new Vector3(1.5f, 0.78f, 0.18f);
+            mouth.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.04f, 0.05f, 0.08f));
+
+            // Çerçeve (kartın ÖNÜNDE, açıklığı sınırlar): üst overhang dudak + 2 yan pervaz.
+            var mLip = ProcMesh.RoundedCube("GateMouthLip");
+            DestroyColliderGO(mLip);
+            mLip.transform.SetParent(parent, false);
+            mLip.transform.position = new Vector3(startPt.x, 0.92f, mouthZ - 0.04f);
+            mLip.transform.localScale = new Vector3(1.66f, 0.14f, 0.2f);
+            mLip.GetComponent<Renderer>().sharedMaterial = lipMat;
+
+            for (int s = -1; s <= 1; s += 2)
+            {
+                var jamb = ProcMesh.RoundedCube("GateMouthJamb");
+                DestroyColliderGO(jamb);
+                jamb.transform.SetParent(parent, false);
+                jamb.transform.position = new Vector3(startPt.x + s * 0.79f, 0.5f, mouthZ - 0.04f);
+                jamb.transform.localScale = new Vector3(0.12f, 0.84f, 0.2f);
+                jamb.GetComponent<Renderer>().sharedMaterial = lipMat;
+            }
+
+            // Ekran (ön yüz üst, kameraya dönük) — sayaç + progress kartların ÜSTÜNDE.
             var screen = ProcMesh.RoundedCube("GateScreen");
-            var scol = screen.GetComponent<Collider>();
-            if (scol != null) Object.Destroy(scol);
+            DestroyColliderGO(screen);
             screen.transform.SetParent(parent, false);
-            screen.transform.position = new Vector3(startPt.x, 1.05f, startPt.z - 0.42f);
+            screen.transform.position = new Vector3(startPt.x, 1.6f, frontZ - 0.03f);
             screen.transform.rotation = Quaternion.Euler(40f, 0f, 0f);
-            screen.transform.localScale = new Vector3(1.15f, 0.66f, 0.12f);
+            screen.transform.localScale = new Vector3(1.3f, 0.62f, 0.12f);
             screen.GetComponent<Renderer>().sharedMaterial =
                 NewLitMaterial(new Color(0.05f, 0.06f, 0.10f));
 
             var gate = body.AddComponent<FactoryGate>();
 
-            // Ekrana GÖMÜLÜ 3B sayaç: ekranla aynı konumda/derinlikte, kameraya dönük.
+            // Ekrana gömülü 3B sayaç (kameraya dönük, Play'de kaymaz).
             var counterAnchor = new GameObject("GateCounter");
             counterAnchor.transform.SetParent(parent, false);
-            counterAnchor.transform.position = screen.transform.position + new Vector3(0f, 0.16f, -0.16f);
-            // Billboard YOK: rotasyon bake'te kamera açısıyla sabitlenir (Inspector'da değiştirilebilir, Play'de kaymaz).
+            counterAnchor.transform.position = screen.transform.position + new Vector3(0f, 0.15f, -0.16f);
             counterAnchor.transform.rotation = Quaternion.Euler(CameraPitch, 0f, 0f);
             var counter = MakeWorldText("0/20", counterAnchor.transform, Vector3.zero,
                 0.07f, Color.white, 90);
 
-            // Sayaç altı ince progress bar: koyu track + sol-kenardan dolan renk çubuğu.
+            // Sayaç altı progress bar: koyu track + sol-kenardan dolan renk çubuğu.
             var progAnchor = new GameObject("GateProgress");
             progAnchor.transform.SetParent(parent, false);
             progAnchor.transform.position = screen.transform.position + new Vector3(0f, -0.16f, -0.16f);
             progAnchor.transform.rotation = Quaternion.Euler(CameraPitch, 0f, 0f);
 
             var track = ProcMesh.RoundedCube("GateProgressTrack");
-            var trcol = track.GetComponent<Collider>();
-            if (trcol != null) Object.Destroy(trcol);
+            DestroyColliderGO(track);
             track.transform.SetParent(progAnchor.transform, false);
             track.transform.localPosition = Vector3.zero;
             track.transform.localScale = new Vector3(0.96f, 0.07f, 0.05f);
             track.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.04f, 0.05f, 0.08f));
 
             var fill = ProcMesh.RoundedCube("GateProgressFill");
-            var fcol = fill.GetComponent<Collider>();
-            if (fcol != null) Object.Destroy(fcol);
+            DestroyColliderGO(fill);
             fill.transform.SetParent(progAnchor.transform, false);
             fill.transform.localPosition = new Vector3(-0.44f, 0f, -0.02f);
             fill.transform.localScale = new Vector3(0.001f, 0.06f, 0.06f);
@@ -842,46 +868,38 @@ namespace CardFactory.Core
 
         static void BuildEndCap(Transform parent, Vector3 endPt)
         {
-            var go = ProcMesh.RoundedCube("BeltEndCap");
-            var col = go.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
-            go.transform.SetParent(parent, false);
-            go.transform.position = new Vector3(endPt.x, 0.45f, endPt.z);
-            go.transform.localScale = new Vector3(1.7f, 0.9f, 0.95f);
-            go.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.55f, 0.57f, 0.60f));
+            // AÇIK çıkış ucu: kapalı kutu/üst trim YOK → kartlar üstten serbest çıkıp
+            // dock'a uçar (içinden yarmaz). Alçak taban + uç makarası + 2 yan ray.
+            var baseMat = NewLitMaterial(new Color(0.55f, 0.57f, 0.60f));
 
-            float frontZ = endPt.z - 0.42f;   // kameraya bakan ön yüz
+            var baseGo = ProcMesh.RoundedCube("BeltEndCap");   // (ad korunur → kontakt gölge bulur)
+            DestroyColliderGO(baseGo);
+            baseGo.transform.SetParent(parent, false);
+            baseGo.transform.position = new Vector3(endPt.x, 0.16f, endPt.z);
+            baseGo.transform.localScale = new Vector3(1.75f, 0.34f, 1.0f);
+            baseGo.GetComponent<Renderer>().sharedMaterial = baseMat;
 
-            // Koyu çıkış ağzı (recessed).
-            var mouth = ProcMesh.RoundedCube("ExitMouth");
-            var mcol = mouth.GetComponent<Collider>();
-            if (mcol != null) Object.Destroy(mcol);
-            mouth.transform.SetParent(parent, false);
-            mouth.transform.position = new Vector3(endPt.x, 0.4f, frontZ);
-            mouth.transform.localScale = new Vector3(1.28f, 0.52f, 0.16f);
-            mouth.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.06f, 0.07f, 0.09f));
+            // Uç makarası (silindir, eksen X) — açık konveyör ucu hissi.
+            var roller = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            roller.name = "BeltEndRoller";
+            DestroyColliderGO(roller);
+            roller.transform.SetParent(parent, false);
+            roller.transform.position = new Vector3(endPt.x, 0.4f, endPt.z + 0.42f);
+            roller.transform.rotation = Quaternion.Euler(0f, 0f, 90f);   // eksen X (bant enine)
+            roller.transform.localScale = new Vector3(0.46f, 0.95f, 0.46f);
+            roller.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.64f, 0.68f, 0.74f));
 
-            // Beyaz dikey slatlar (chute hissi).
-            var slatMat = NewLitMaterial(new Color(0.88f, 0.90f, 0.93f));
-            for (int s = -2; s <= 2; s++)
+            // 2 alçak yan ray (üst açık).
+            var railMat = NewLitMaterial(new Color(0.66f, 0.70f, 0.78f));
+            for (int s = -1; s <= 1; s += 2)
             {
-                var slat = ProcMesh.RoundedCube("ExitSlat");
-                var slcol = slat.GetComponent<Collider>();
-                if (slcol != null) Object.Destroy(slcol);
-                slat.transform.SetParent(parent, false);
-                slat.transform.position = new Vector3(endPt.x + s * 0.26f, 0.4f, frontZ - 0.04f);
-                slat.transform.localScale = new Vector3(0.1f, 0.48f, 0.06f);
-                slat.GetComponent<Renderer>().sharedMaterial = slatMat;
+                var rail = ProcMesh.RoundedCube("BeltEndRail");
+                DestroyColliderGO(rail);
+                rail.transform.SetParent(parent, false);
+                rail.transform.position = new Vector3(endPt.x + s * 0.8f, 0.34f, endPt.z);
+                rail.transform.localScale = new Vector3(0.14f, 0.42f, 1.0f);
+                rail.GetComponent<Renderer>().sharedMaterial = railMat;
             }
-
-            // Açık üst trim.
-            var capTrim = ProcMesh.RoundedCube("ExitTrim");
-            var ctcol = capTrim.GetComponent<Collider>();
-            if (ctcol != null) Object.Destroy(ctcol);
-            capTrim.transform.SetParent(parent, false);
-            capTrim.transform.position = new Vector3(endPt.x, 0.92f, endPt.z);
-            capTrim.transform.localScale = new Vector3(1.82f, 0.13f, 1.05f);
-            capTrim.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.68f, 0.70f, 0.74f));
         }
 
         // Desteleri (kartlar) stack anchor'larının ALTINA kurar; anchor konumu kullanılır.
