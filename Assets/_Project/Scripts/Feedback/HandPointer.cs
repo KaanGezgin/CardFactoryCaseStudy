@@ -86,11 +86,10 @@ namespace CardFactory.Feedback
 
         static Material BuildGhostMaterial()
         {
-            var c = new UnityEngine.Color(1f, 0.97f, 0.93f);
+            // Çizgi-film eli hissi için ten/peach tonu (referanstaki el gibi).
+            var c = new UnityEngine.Color(0.98f, 0.80f, 0.62f);
             var mat = GameBootstrap.NewLitMaterial(c);
-            mat.SetFloat("_Smoothness", 0.72f);
-            mat.EnableKeyword("_EMISSION");
-            mat.SetColor("_EmissionColor", c * 0.18f);
+            mat.SetFloat("_Smoothness", 0.3f);   // mat ten
             return mat;
         }
 

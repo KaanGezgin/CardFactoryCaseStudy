@@ -346,9 +346,9 @@ namespace CardFactory.Core
             var beltRoot = new GameObject("Belt");
             beltRoot.transform.SetParent(parent, false);
 
-            var surfaceMat = NewLitMaterial(new Color(0.30f, 0.36f, 0.46f));
-            var railMat = NewLitMaterial(new Color(0.66f, 0.72f, 0.82f));
-            const float railW = 0.2f;
+            var surfaceMat = NewLitMaterial(new Color(0.47f, 0.53f, 0.62f));   // daha açık mavi-gri (referans)
+            var railMat = NewLitMaterial(new Color(0.93f, 0.96f, 0.99f));     // temiz beyaz kenar ray
+            const float railW = 0.18f;
 
             for (int i = 0; i < pts.Count - 1; i++)
             {
@@ -394,7 +394,7 @@ namespace CardFactory.Core
 
         static void BuildBeltChevrons(Transform beltRoot, List<Vector3> pts)
         {
-            var chevMat = NewGlowMaterial(new Color(0.90f, 0.94f, 1f, 1f));   // hafif parlak → bant kimliği belirgin
+            var chevMat = NewLitMaterial(new Color(0.34f, 0.39f, 0.48f));   // açık bantta okunan koyu/mat ok
             var flowGo = new GameObject("BeltFlow");
             flowGo.transform.SetParent(beltRoot, false);
             var flow = flowGo.AddComponent<BeltFlow>();
@@ -1033,10 +1033,11 @@ namespace CardFactory.Core
                 if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.45f);
             }
 
-            // Post-processing volume (her açılışta taze kur → serialize sorunlarından bağımsız)
-            var oldFx = world.transform.Find("PostFX");
-            if (oldFx != null) Object.DestroyImmediate(oldFx.gameObject);
-            BuildPostFX(world.transform);
+            // Post-processing volume — IDEMPOTENT: yoksa kur, varsa DOKUNMA → kullanıcının
+            // Inspector'da yaptığı renk tonu ayarları ezilmez. (Koddaki değerleri uygulamak için
+            // 'Rebake Belt + Color' aracı PostFX'i baştan kurar.)
+            if (world.transform.Find("PostFX") == null)
+                BuildPostFX(world.transform);
 
             // Kamera post-processing aç
             var cam = world.GetComponentInChildren<Camera>(true);
@@ -1059,26 +1060,50 @@ namespace CardFactory.Core
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             vol.sharedProfile = profile;
 
+            // Hafif/yumuşak ton — göz yormasın (yüksek satür/kontrast/bloom kaldırıldı).
             var bloom = profile.Add<Bloom>();
             bloom.active = true;
-            bloom.intensity.Override(0.65f);
-            bloom.threshold.Override(0.82f);   // highlight'lar (chevron/parlak yüzey) parlasın
-            bloom.scatter.Override(0.65f);
+            bloom.intensity.Override(0.28f);
+            bloom.threshold.Override(0.95f);   // sadece çok parlak yüzeyler hafif parlar
+            bloom.scatter.Override(0.6f);
 
             var vig = profile.Add<Vignette>();
             vig.active = true;
-            vig.intensity.Override(0.27f);
+            vig.intensity.Override(0.14f);
             vig.smoothness.Override(0.5f);
 
             var ca = profile.Add<ColorAdjustments>();
             ca.active = true;
-            ca.saturation.Override(26f);
-            ca.contrast.Override(12f);
-            ca.postExposure.Override(0.06f);
+            ca.saturation.Override(10f);                                  // hafif canlılık (aşırı değil)
+            ca.contrast.Override(4f);
+            ca.postExposure.Override(0.03f);
+            ca.colorFilter.Override(Color.white);                         // nötr beyaz
+
+            var wb = profile.Add<WhiteBalance>();
+            wb.active = true;
+            wb.temperature.Override(0f);                                  // nötr; sahneden ayarlanabilir
 
             var tone = profile.Add<Tonemapping>();
             tone.active = true;
             tone.mode.Override(TonemappingMode.Neutral);
+        }
+
+        /// <summary>
+        /// SEÇİCİ BAKE: yalnızca Belt görselini + PostFX (renk tonu) volume'unu yeniden kurar.
+        /// Dünyadaki DİĞER her şeye (bins/anchor/kapı/dock/sandık/arka plan/zemin/kamera/lid) DOKUNMAZ
+        /// → manuel sahne ayarları korunur. Editör 'Rebake Belt + Color' aracı kullanır.
+        /// </summary>
+        public static void RebakeBeltAndPostFX(GameObject world)
+        {
+            if (world == null) return;
+
+            var oldBelt = world.transform.Find("Belt");
+            if (oldBelt != null) Object.DestroyImmediate(oldBelt.gameObject);
+            BuildBeltVisual(world.transform, BuildUPath());
+
+            var oldFx = world.transform.Find("PostFX");
+            if (oldFx != null) Object.DestroyImmediate(oldFx.gameObject);
+            BuildPostFX(world.transform);
         }
 
         static Material GroundMaterial()

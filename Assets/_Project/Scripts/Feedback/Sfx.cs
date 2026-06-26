@@ -34,22 +34,24 @@ namespace CardFactory.Feedback
         {
             clips = new Dictionary<string, AudioClip>
             {
-                { "click",    Tone(900f, 0.08f, 0.55f) },
-                { "send",     Sweep(520f, 1000f, 0.16f, 0.5f) },
-                { "fill",     Tone(720f, 0.07f, 0.42f) },
-                { "ship",     Arp(new[] { 660f, 990f, 1320f }, 0.085f, 0.8f) },   // ka-ching
-                { "complete", Arp(new[] { 523f, 659f, 784f, 1046f, 1318f }, 0.10f, 0.95f) }, // fanfar
-                { "warn",     Tone(190f, 0.18f, 0.7f) },
-                { "fail",     Arp(new[] { 392f, 311f, 233f, 165f }, 0.16f, 0.9f) }, // ağır iniş
+                { "click",    Tone(820f, 0.09f, 0.42f) },
+                { "send",     Sweep(500f, 880f, 0.16f, 0.38f) },
+                { "fill",     Tone(660f, 0.08f, 0.34f) },
+                { "ship",     Arp(new[] { 660f, 990f, 1320f }, 0.085f, 0.55f) },   // ka-ching (yumuşak)
+                { "complete", Arp(new[] { 523f, 659f, 784f, 1046f, 1318f }, 0.10f, 0.62f) }, // fanfar
+                { "warn",     Tone(300f, 0.16f, 0.42f) },
+                { "fail",     Arp(new[] { 392f, 311f, 233f, 165f }, 0.16f, 0.6f) }, // ağır iniş
             };
         }
+
+        const float Master = 0.5f;   // genel ses (yumuşak)
 
         public static void Play(string name)
         {
             if (Application.isBatchMode) return;
             var s = Src;
             if (clips.TryGetValue(name, out var c) && c != null)
-                s.PlayOneShot(c, 1f);
+                s.PlayOneShot(c, Master);
         }
 
         public static void Haptic()
@@ -61,18 +63,18 @@ namespace CardFactory.Feedback
 
         // --- Sentez (harmonik zengin + atak/iniş zarfı → daha çarpıcı) ---
 
-        /// <summary>Temel + 2./3. harmonik (normalize ~1 tepe) → daha dolgun ton.</summary>
+        /// <summary>Neredeyse saf sinüs (hafif 2. harmonik) → yumuşak, az tiz ton.</summary>
         static float Voice(float phase)
         {
-            return (Mathf.Sin(phase) + 0.45f * Mathf.Sin(2f * phase) + 0.22f * Mathf.Sin(3f * phase)) / 1.67f;
+            return (Mathf.Sin(phase) + 0.15f * Mathf.Sin(2f * phase)) / 1.15f;
         }
 
-        /// <summary>Hızlı atak + pürüzsüz iniş zarfı.</summary>
+        /// <summary>Yumuşak atak (klik yok) + pürüzsüz iniş zarfı.</summary>
         static float Env(int i, int n)
         {
             float u = (float)i / n;
-            float a = u < 0.02f ? u / 0.02f : 1f;          // ~2% atak (klik/pop hissi)
-            return a * Mathf.Pow(1f - u, 1.3f);
+            float a = u < 0.1f ? Mathf.SmoothStep(0f, 1f, u / 0.1f) : 1f;   // ~10% yumuşak atak
+            return a * Mathf.Pow(1f - u, 1.6f);                            // yumuşak, hızlı sönüm
         }
 
         static AudioClip Tone(float freq, float dur, float vol)

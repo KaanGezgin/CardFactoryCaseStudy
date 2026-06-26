@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using CardFactory.Core;
 using CardFactory.Data;
@@ -20,13 +21,18 @@ namespace CardFactory.Gameplay
         Conveyor conveyor;
         BoxCollider tapCollider;
 
+        Vector3 homeLocalPos;         // deste başlangıç yeri (anchor'a göre)
+        float advanceZ;              // banta doğru biriken ilerleme
+        Coroutine slideCo;
+        const float AdvanceStep = 0.085f;   // gönderilen kart başına ileri adım
+
         const int MaxVisible = 12;    // elde 16'ya kadar olsa da en fazla 12 kart görünür
         const float CardW = 0.85f;
-        const float CardThick = 0.1f;     // daha tok kart (yandan kalınlık görünür)
+        const float CardThick = 0.07f;   // ince kart (referanstaki gibi)
         const float CardLen = 0.95f;
-        const float TiltX = -20f;     // neredeyse yere yatık (kuş bakışı)
-        const float StepY = 0.032f;   // 20 kart sığsın diye sıkı
-        const float StepZ = 0.11f;    // geriye doğru dizilir
+        const float TiltX = -18f;     // neredeyse yere yatık (kuş bakışı)
+        const float StepY = 0.1f;     // kartlar arası açık → adet sayılır
+        const float StepZ = 0.11f;    // yelpaze geriye açık → arkadaki renk görünür
         const float BaseY = 0.14f;
 
         public bool IsEmpty => cards.Count == 0;
@@ -36,6 +42,7 @@ namespace CardFactory.Gameplay
         {
             conveyor = conv;
             transform.position = basePos;
+            homeLocalPos = transform.localPosition;
             tapCollider = gameObject.AddComponent<BoxCollider>();
 
             cards.AddRange(colors);
@@ -77,6 +84,27 @@ namespace CardFactory.Gameplay
             }
 
             UpdateCollider(show);
+        }
+
+        // Bir grup gönderilince tüm deste banta doğru bir adım ilerler (kuyruk öne adımlar).
+        void AdvanceForward(int group)
+        {
+            advanceZ += group * AdvanceStep;
+            if (slideCo != null) StopCoroutine(slideCo);
+            if (isActiveAndEnabled) slideCo = StartCoroutine(SlideRoutine());
+        }
+
+        IEnumerator SlideRoutine()
+        {
+            Vector3 target = homeLocalPos + new Vector3(0f, 0f, advanceZ);
+            while ((transform.localPosition - target).sqrMagnitude > 1e-5f)
+            {
+                transform.localPosition = Vector3.MoveTowards(transform.localPosition, target, 6f * Time.deltaTime);
+                target = homeLocalPos + new Vector3(0f, 0f, advanceZ);   // arka arkaya gönderimde hedef güncellensin
+                yield return null;
+            }
+            transform.localPosition = target;
+            slideCo = null;
         }
 
         void UpdateCollider(int show)
@@ -129,6 +157,7 @@ namespace CardFactory.Gameplay
 
             cards.RemoveRange(cards.Count - groupSize, groupSize);
             RefreshVisuals();
+            AdvanceForward(groupSize);   // kalan deste banta doğru ilerlesin
 
             // Açığa çıkan yeni üst kart tatmin edici şekilde "pop" yapar.
             if (visuals.Count > 0)

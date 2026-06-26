@@ -85,6 +85,24 @@ namespace CardFactory.EditorTools
             return n;
         }
 
+        // Yalnızca Belt görselini + renk tonunu (PostFX) yeniden bake eder; dünyanın
+        // GERİSİNE (bins/anchor/kapı/dock/sandık/arka plan/zemin) DOKUNMAZ → manuel ayarlar korunur.
+        [MenuItem("Tools/Card Factory/Rebake Belt + Color (Keep Rest)")]
+        public static void RebakeBeltColor()
+        {
+            var world = GameObject.Find("CardFactoryWorld");
+            if (world == null)
+            {
+                Debug.LogWarning("[CardFactory] CardFactoryWorld yok. Önce 'Bake World Into Scene'.");
+                return;
+            }
+            GameBootstrap.RebakeBeltAndPostFX(world);
+            EditorSceneManager.MarkSceneDirty(world.scene);
+            Selection.activeGameObject = world;
+            Debug.Log("[CardFactory] Bant + renk tonu yeniden bake edildi (dünyanın gerisi KORUNDU). " +
+                      "Sahneyi KAYDET (Ctrl+S).");
+        }
+
         [MenuItem("Tools/Card Factory/Clear Baked World")]
         public static void Clear()
         {
