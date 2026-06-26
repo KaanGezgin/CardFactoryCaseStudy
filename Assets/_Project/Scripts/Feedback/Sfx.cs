@@ -34,18 +34,18 @@ namespace CardFactory.Feedback
         {
             clips = new Dictionary<string, AudioClip>
             {
-                { "click",    Tone(500f,  0.09f, 0.60f, hit:true) },                                   // seçme: tok mid vuruş
-                { "send",     Sweep(340f, 680f,  0.15f, 0.55f, hit:true) },                            // gönder: yukarı swoosh
-                { "fill",     Arp(new[] { 420f, 630f },             0.07f, 0.54f, hit:true) },         // slota oturma: çift pluck
-                { "dock",     Sweep(400f, 190f,  0.18f, 0.56f, hit:true) },                            // dock düşüş: derin plop
-                { "ship",     Arp(new[] { 330f, 440f, 660f },       0.10f, 0.62f) },                   // sevk: sıcak ka-ching
-                { "complete", Arp(new[] { 330f, 415f, 523f, 659f, 784f }, 0.095f, 0.65f) },            // fanfar (maks 784 Hz)
-                { "warn",     Sweep(260f, 200f,  0.20f, 0.58f, hit:true) },                            // uyarı: alçak düşüş
-                { "fail",     Arp(new[] { 311f, 247f, 185f, 124f }, 0.18f, 0.65f) },                   // fail: derin iniş
+                { "click",    Tone(500f,  0.09f, 0.82f, hit:true) },                                   // seçme: tok mid vuruş
+                { "send",     Sweep(340f, 680f,  0.15f, 0.76f, hit:true) },                            // gönder: yukarı swoosh
+                { "fill",     Arp(new[] { 420f, 630f },             0.07f, 0.74f, hit:true) },         // slota oturma: çift pluck
+                { "dock",     Sweep(400f, 190f,  0.18f, 0.78f, hit:true) },                            // dock düşüş: derin plop
+                { "ship",     Arp(new[] { 330f, 440f, 660f },       0.10f, 0.82f) },                   // sevk: sıcak ka-ching
+                { "complete", Arp(new[] { 330f, 415f, 523f, 659f, 784f }, 0.095f, 0.85f) },            // fanfar (maks 784 Hz)
+                { "warn",     Sweep(260f, 200f,  0.20f, 0.78f, hit:true) },                            // uyarı: alçak düşüş
+                { "fail",     Arp(new[] { 311f, 247f, 185f, 124f }, 0.18f, 0.85f) },                   // fail: derin iniş
             };
         }
 
-        const float Master = 0.72f;  // genel ses
+        const float Master = 1.0f;   // genel ses
 
         public static void Play(string name)
         {
