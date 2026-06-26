@@ -26,25 +26,24 @@ namespace CardFactory.Gameplay
         int inFlight;
         int landed;
 
-        Material fillMat;          // hedef renk (dolan bar)
-        Material wellMat;          // boş kanal (koyu)
+        Material fillCellMat;      // dolu hücre (parlak hedef renk)
+        Material emptyCellMat;     // boş hücre (koyu/oyuk)
 
-        Transform fillBar, fillCap, well;
-        Renderer fillBarRend, fillCapRend, wellRend;
-        float barT;                // gösterilen dolum oranı (0..1), yumuşak lerp
-        int shownFill;             // banda yansımış (inmiş) kart sayısı
+        Renderer[] cells;          // AYRIK dolum hücreleri (alttan üste); her biri boş/dolu
+        Transform cellsRoot;
+        Renderer[] frameRends;     // kapalı çerçeve (sol/sağ/üst/alt) → kutu rengine boyanır
+        int shownFill;             // dolu hücre sayısı
 
         Transform marker;          // üstte hedef-renk durum küresi (lamba)
         Renderer markerRend;
         Renderer bodyRend;
-        Transform grooveRoot;      // segment yivleri (referans gibi rung'lar)
 
         const float BodyHeight = 1.35f;
         const float SlotFrontZ = -0.28f;
         const float LeanBack = 28f;     // konteyner hafif geriye yatar
         const float LampSize = 0.22f;   // durum küresi çapı
 
-        // Sürekli dolum barı geometrisi (slot yerine yükselen renk sütunu).
+        // Ayrık dolum hücreleri için kanal geometrisi.
         const float FillBottomY = 0.16f;
         const float FillH = BodyHeight - 0.26f;   // doldurulabilir yükseklik
         const float FillWidth = 0.7f;
@@ -70,46 +69,24 @@ namespace CardFactory.Gameplay
             bodyRend = bodyGo.GetComponent<Renderer>();
             bodyRend.sharedMaterial = GameBootstrap.NewLitMaterial(frameColor);
 
-            // Üst çerçeve / kapak şeridi.
-            var topRail = ProcMesh.RoundedCube("ContainerTop");
+            // Üst KAPAK — parlak beyaz lid (referanstaki gibi konteyner kapağı + tutamak).
+            var topRail = ProcMesh.RoundedCube("ContainerLid");
             DestroyCollider(topRail);
             topRail.transform.SetParent(transform, false);
-            topRail.transform.localPosition = new Vector3(0f, BodyHeight + 0.06f, 0.02f);
-            topRail.transform.localScale = new Vector3(0.98f, 0.12f, 0.54f);
-            topRail.GetComponent<Renderer>().sharedMaterial = GameBootstrap.NewLitMaterial(trimColor);
+            topRail.transform.localPosition = new Vector3(0f, BodyHeight + 0.07f, 0.0f);
+            topRail.transform.localScale = new Vector3(1.04f, 0.2f, 0.62f);
+            var lidMat = GameBootstrap.NewLitMaterial(new Color(0.95f, 0.96f, 0.99f));
+            lidMat.SetFloat("_Smoothness", 0.8f);
+            topRail.GetComponent<Renderer>().sharedMaterial = lidMat;
 
             // Alt taban şeridi.
             var baseRail = ProcMesh.RoundedCube("ContainerBase");
             DestroyCollider(baseRail);
             baseRail.transform.SetParent(transform, false);
-            baseRail.transform.localPosition = new Vector3(0f, 0.06f, 0.02f);
-            baseRail.transform.localScale = new Vector3(0.98f, 0.12f, 0.54f);
+            baseRail.transform.localPosition = new Vector3(0f, 0.05f, 0.0f);
+            baseRail.transform.localScale = new Vector3(1.0f, 0.12f, 0.56f);
             baseRail.GetComponent<Renderer>().sharedMaterial = GameBootstrap.NewLitMaterial(trimColor);
-
-            // Ön yüzde oluklu (corrugated) dikey şeritler — konteyner hissi.
-            var ribMat = GameBootstrap.NewLitMaterial(new Color(0.10f, 0.11f, 0.13f));
-            for (int i = -2; i <= 2; i++)
-            {
-                var rib = ProcMesh.RoundedCube("ContainerRib_" + i);
-                DestroyCollider(rib);
-                rib.transform.SetParent(transform, false);
-                rib.transform.localPosition = new Vector3(i * 0.17f, BodyHeight * 0.5f, -0.24f);
-                rib.transform.localScale = new Vector3(0.06f, BodyHeight * 0.92f, 0.06f);
-                rib.GetComponent<Renderer>().sharedMaterial = ribMat;
-            }
-
-            // Köşe direkleri.
-            var postMat = GameBootstrap.NewLitMaterial(new Color(0.08f, 0.09f, 0.11f));
-            foreach (var sx in new[] { -1f, 1f })
-            foreach (var sz in new[] { -1f, 1f })
-            {
-                var post = ProcMesh.RoundedCube("ContainerPost");
-                DestroyCollider(post);
-                post.transform.SetParent(transform, false);
-                post.transform.localPosition = new Vector3(sx * 0.44f, BodyHeight * 0.5f, sz * 0.22f);
-                post.transform.localScale = new Vector3(0.08f, BodyHeight * 0.98f, 0.08f);
-                post.GetComponent<Renderer>().sharedMaterial = postMat;
-            }
+            // (Oluklu şeritler + köşe direkleri kaldırıldı → uzaktan temiz konteyner okunur.)
 
             // Hedef-renk durum lambası — üstte parlak KÜRE (referans gibi).
             var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -121,7 +98,7 @@ namespace CardFactory.Gameplay
             markerRend = markerGo.GetComponent<Renderer>();
             marker = markerGo.transform;
 
-            BuildFillColumn();
+            BuildFrame();   // hücreleri çevreleyen kapalı çerçeve (sol/sağ/üst/alt)
 
             // Zemin kontakt gölgesi (yumuşak AO hissi). Konteyner eğik durduğundan
             // gölge world-space'te flat tutulur (SpawnContactShadow world rotasyon ayarlar).
@@ -144,11 +121,19 @@ namespace CardFactory.Gameplay
             Active = true;
 
             var full = CardPalette.Get(color);
-            fillMat = GameBootstrap.NewLitMaterial(full);
-            fillMat.SetFloat("_Smoothness", 0.62f);                 // parlak, doygun fill (referans)
-            fillMat.EnableKeyword("_EMISSION");
-            fillMat.SetColor("_EmissionColor", full * 0.35f);
-            wellMat = GameBootstrap.NewLitMaterial(full * 0.28f);   // koyu boş kanal
+            fillCellMat = GameBootstrap.NewLitMaterial(full);          // DOLU hücre: parlak, doygun
+            fillCellMat.SetFloat("_Smoothness", 0.6f);
+            fillCellMat.EnableKeyword("_EMISSION");
+            fillCellMat.SetColor("_EmissionColor", full * 0.3f);
+            emptyCellMat = GameBootstrap.NewLitMaterial(full * 0.32f); // BOŞ hücre: kutu renginin KOYU hali
+            emptyCellMat.SetFloat("_Smoothness", 0.18f);
+
+            // Çerçeve (sol/sağ/üst/alt) = kutu rengi (hafif tonlu → dolu hücreden ayrışsın).
+            var frameMat = GameBootstrap.NewLitMaterial(full * 0.7f);
+            if (frameRends != null)
+                foreach (var r in frameRends)
+                    if (r != null) r.sharedMaterial = frameMat;
+
             if (bodyRend != null)
             {
                 var shell = GameBootstrap.NewLitMaterial(UnityEngine.Color.Lerp(full * 0.35f, new UnityEngine.Color(0.12f, 0.13f, 0.15f), 0.55f));
@@ -162,13 +147,9 @@ namespace CardFactory.Gameplay
                 markerRend.sharedMaterial = lightMat;
             }
 
-            // Bar/kanal renklendir + sıfırla.
-            if (wellRend != null) wellRend.sharedMaterial = wellMat;
-            if (fillBarRend != null) fillBarRend.sharedMaterial = fillMat;
+            // Hücreleri (kapasiteye göre) yeniden kur, hepsi BOŞ.
             shownFill = 0;
-            barT = 0f;
-            UpdateBar(0f);
-            BuildGrooves(capacity);
+            BuildCells(capacity);
 
             gameObject.SetActive(true);
             transform.localScale = Vector3.one;
@@ -189,96 +170,70 @@ namespace CardFactory.Gameplay
                 float p = 0.9f + Mathf.Sin(Time.time * 4.5f) * 0.1f;
                 marker.localScale = Vector3.one * (LampSize * p);
             }
-
-            // Dolum barını hedef orana doğru yumuşak yükselt.
-            if (fillBar != null && Capacity > 0)
-            {
-                float targetT = (float)shownFill / Capacity;
-                if (Mathf.Abs(barT - targetT) > 0.0005f)
-                {
-                    barT = Mathf.MoveTowards(barT, targetT, Time.deltaTime * 2.5f);
-                    UpdateBar(barT);
-                }
-            }
         }
 
-        // Slot dizisi yerine: koyu boş kanal + yükselen renk barı + parlak kapak.
-        void BuildFillColumn()
+        // Hücreleri çevreleyen KAPALI çerçeve (sol/sağ duvar + üst/alt) — konteyner hissi,
+        // yandan kapalı. Kapasiteden bağımsız (sabit FillH), Init'te bir kez kurulur.
+        void BuildFrame()
         {
-            var wellGo = ProcMesh.RoundedCube("FillWell");
-            DestroyCollider(wellGo);
-            wellGo.transform.SetParent(transform, false);
-            wellGo.transform.localPosition = new Vector3(0f, FillBottomY + FillH * 0.5f, SlotFrontZ + 0.03f);
-            wellGo.transform.localScale = new Vector3(FillWidth + 0.04f, FillH, FillDepth * 0.7f);
-            wellRend = wellGo.GetComponent<Renderer>();
+            frameRends = new Renderer[4];
+            int fi = 0;
+            float midY = FillBottomY + FillH * 0.5f;
+            float frontZ = SlotFrontZ - 0.06f;   // hücrelerin önünde durur → çerçeveler
 
-            var barGo = ProcMesh.RoundedCube("FillBar");
-            DestroyCollider(barGo);
-            barGo.transform.SetParent(transform, false);
-            fillBar = barGo.transform;
-            fillBarRend = barGo.GetComponent<Renderer>();
+            foreach (var sx in new[] { -1f, 1f })   // sol/sağ duvar
+            {
+                var wall = ProcMesh.RoundedCube("CellWall");
+                DestroyCollider(wall);
+                wall.transform.SetParent(transform, false);
+                wall.transform.localPosition = new Vector3(sx * (FillWidth * 0.5f + 0.06f), midY, frontZ);
+                wall.transform.localScale = new Vector3(0.1f, FillH + 0.12f, 0.24f);
+                frameRends[fi++] = wall.GetComponent<Renderer>();
+            }
 
-            var capGo = ProcMesh.RoundedCube("FillCap");
-            DestroyCollider(capGo);
-            capGo.transform.SetParent(transform, false);
-            capGo.transform.localScale = new Vector3(FillWidth + 0.05f, 0.06f, FillDepth + 0.03f);
-            fillCap = capGo.transform;
-            fillCapRend = capGo.GetComponent<Renderer>();
-            var capMat = GameBootstrap.NewLitMaterial(new UnityEngine.Color(0.96f, 0.97f, 1f));
-            capMat.SetFloat("_Smoothness", 0.85f);   // glossy beyaz kapak
-            fillCapRend.sharedMaterial = capMat;
-
-            UpdateBar(0f);
+            float[] barY = { FillBottomY + FillH + 0.04f, FillBottomY - 0.04f };   // üst/alt çerçeve
+            foreach (var yy in barY)
+            {
+                var bar = ProcMesh.RoundedCube("CellFrameBar");
+                DestroyCollider(bar);
+                bar.transform.SetParent(transform, false);
+                bar.transform.localPosition = new Vector3(0f, yy, frontZ);
+                bar.transform.localScale = new Vector3(FillWidth + 0.26f, 0.1f, 0.24f);
+                frameRends[fi++] = bar.GetComponent<Renderer>();
+            }
+            // Renk Configure'da (hedef renge göre) verilir.
         }
 
-        // Fill kanalı boyunca yatay segment yivleri (referanstaki rung'lar). Kapasiteye
-        // göre capacity-1 koyu çizgi → fill segmentli görünür. Configure'da yeniden kurulur.
-        void BuildGrooves(int capacity)
+        // AYRIK dolum hücreleri (alttan üste). Hepsi boş başlar; kart inince ilgili hücre dolu olur.
+        void BuildCells(int capacity)
         {
-            if (grooveRoot != null) Object.Destroy(grooveRoot.gameObject);
-            if (capacity < 2) return;
+            if (cellsRoot != null) Object.Destroy(cellsRoot.gameObject);
+            var rootGo = new GameObject("Cells");
+            cellsRoot = rootGo.transform;
+            cellsRoot.SetParent(transform, false);
 
-            var rootGo = new GameObject("FillGrooves");
-            grooveRoot = rootGo.transform;
-            grooveRoot.SetParent(transform, false);
-
-            var grooveMat = GameBootstrap.NewLitMaterial(new UnityEngine.Color(0.05f, 0.06f, 0.08f));
-            // Bar'ın ÖN YÜZÜNÜN önüne yerleştir (yoksa barın içinde kalıp görünmez → tek blok gibi durur).
-            float grooveZ = SlotFrontZ - FillDepth * 0.5f - 0.02f;
-            for (int k = 1; k < capacity; k++)
+            cells = new Renderer[capacity];
+            float pitch = capacity > 0 ? FillH / capacity : FillH;
+            float cellH = pitch * 0.8f;            // hücreler arası küçük boşluk
+            for (int i = 0; i < capacity; i++)
             {
-                float y = FillBottomY + (k / (float)capacity) * FillH;
-                var g = ProcMesh.RoundedCube("Groove_" + k);
-                DestroyCollider(g);
-                g.transform.SetParent(grooveRoot, false);
-                g.transform.localPosition = new Vector3(0f, y, grooveZ);
-                g.transform.localScale = new Vector3(FillWidth + 0.06f, 0.05f, 0.07f);
-                g.GetComponent<Renderer>().sharedMaterial = grooveMat;
-            }
-        }
-
-        void UpdateBar(float t)
-        {
-            t = Mathf.Clamp01(t);
-            float h = Mathf.Max(0.0001f, t * FillH);
-            if (fillBar != null)
-            {
-                fillBar.localScale = new Vector3(FillWidth, h, FillDepth);
-                fillBar.localPosition = new Vector3(0f, FillBottomY + h * 0.5f, SlotFrontZ);
-                fillBar.gameObject.SetActive(t > 0.001f);
-            }
-            if (fillCap != null)
-            {
-                fillCap.localPosition = new Vector3(0f, FillBottomY + h, SlotFrontZ - 0.01f);
-                fillCap.gameObject.SetActive(t > 0.001f);
+                float y = FillBottomY + (i + 0.5f) * pitch;
+                var c = ProcMesh.RoundedCube("Cell_" + i);
+                DestroyCollider(c);
+                c.transform.SetParent(cellsRoot, false);
+                c.transform.localPosition = new Vector3(0f, y, SlotFrontZ - 0.03f);
+                c.transform.localScale = new Vector3(FillWidth, cellH, FillDepth * 0.5f);
+                var r = c.GetComponent<Renderer>();
+                r.sharedMaterial = emptyCellMat;
+                cells[i] = r;
             }
         }
 
         Vector3 SlotWorldPos(int idx)
         {
-            float frac = Capacity > 0 ? (idx + 1f) / Capacity : 0f;
-            float y = FillBottomY + frac * FillH;
-            return transform.TransformPoint(new Vector3(0f, y, SlotFrontZ));
+            float pitch = Capacity > 0 ? FillH / Capacity : FillH;
+            float y = FillBottomY + (idx + 0.5f) * pitch;
+            return transform.TransformPoint(new Vector3(0f, y, SlotFrontZ - 0.03f));
         }
 
         public void Accept(Card card)
@@ -295,7 +250,7 @@ namespace CardFactory.Gameplay
                 if (card != null) Object.Destroy(card.gameObject);
                 inFlight--;
                 landed++;
-                FillSlot();
+                FillSlot(idx);
                 Juice.PunchScale(transform, Vector3.one, 0.05f, 0.1f);
                 Sfx.Play("fill");
                 if (gm != null) gm.OnCardShipped();
@@ -308,12 +263,15 @@ namespace CardFactory.Gameplay
             });
         }
 
-        void FillSlot()
+        void FillSlot(int idx)
         {
             shownFill = Mathf.Min(Capacity, shownFill + 1);
-            // Kapakta tatmin edici "doluyor" vuruşu.
-            if (fillCap != null)
-                Juice.PunchScale(fillCap, fillCap.localScale, 0.2f, 0.12f);
+            // İlgili hücre BOŞ→DOLU: parlak renge boyanır + tatmin edici pop.
+            if (cells != null && idx >= 0 && idx < cells.Length && cells[idx] != null)
+            {
+                cells[idx].sharedMaterial = fillCellMat;
+                Juice.PunchScale(cells[idx].transform, cells[idx].transform.localScale, 0.22f, 0.12f);
+            }
         }
 
         void Ship()
