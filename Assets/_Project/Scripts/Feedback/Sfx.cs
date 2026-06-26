@@ -34,18 +34,18 @@ namespace CardFactory.Feedback
         {
             clips = new Dictionary<string, AudioClip>
             {
-                { "click",    Tone(820f, 0.09f, 0.42f) },
-                { "send",     Sweep(500f, 880f, 0.16f, 0.38f) },
-                { "fill",     Arp(new[] { 620f, 830f }, 0.05f, 0.32f) },   // kutuya oturma: yumuşak iki-ton pluck
-                { "dock",     Sweep(470f, 300f, 0.14f, 0.36f) },           // dock'a düşüş: alçalan yumuşak plop
-                { "ship",     Arp(new[] { 660f, 990f, 1320f }, 0.085f, 0.55f) },   // ka-ching (yumuşak)
-                { "complete", Arp(new[] { 523f, 659f, 784f, 1046f, 1318f }, 0.10f, 0.62f) }, // fanfar
-                { "warn",     Tone(300f, 0.16f, 0.42f) },
-                { "fail",     Arp(new[] { 392f, 311f, 233f, 165f }, 0.16f, 0.6f) }, // ağır iniş
+                { "click",    Tone(500f,  0.09f, 0.60f, hit:true) },                                   // seçme: tok mid vuruş
+                { "send",     Sweep(340f, 680f,  0.15f, 0.55f, hit:true) },                            // gönder: yukarı swoosh
+                { "fill",     Arp(new[] { 420f, 630f },             0.07f, 0.54f, hit:true) },         // slota oturma: çift pluck
+                { "dock",     Sweep(400f, 190f,  0.18f, 0.56f, hit:true) },                            // dock düşüş: derin plop
+                { "ship",     Arp(new[] { 330f, 440f, 660f },       0.10f, 0.62f) },                   // sevk: sıcak ka-ching
+                { "complete", Arp(new[] { 330f, 415f, 523f, 659f, 784f }, 0.095f, 0.65f) },            // fanfar (maks 784 Hz)
+                { "warn",     Sweep(260f, 200f,  0.20f, 0.58f, hit:true) },                            // uyarı: alçak düşüş
+                { "fail",     Arp(new[] { 311f, 247f, 185f, 124f }, 0.18f, 0.65f) },                   // fail: derin iniş
             };
         }
 
-        const float Master = 0.5f;   // genel ses (yumuşak)
+        const float Master = 0.72f;  // genel ses
 
         public static void Play(string name)
         {
@@ -62,35 +62,45 @@ namespace CardFactory.Feedback
 #endif
         }
 
-        // --- Sentez (harmonik zengin + atak/iniş zarfı → daha çarpıcı) ---
+        // --- Sentez ---
 
-        /// <summary>Neredeyse saf sinüs (hafif 2. harmonik) → yumuşak, az tiz ton.</summary>
+        /// <summary>Fundamental + oktav body + 5th presence → sıcak, tok, tiz değil.</summary>
         static float Voice(float phase)
         {
-            return (Mathf.Sin(phase) + 0.15f * Mathf.Sin(2f * phase)) / 1.15f;
+            return Mathf.Sin(phase) * 0.65f
+                 + Mathf.Sin(2f * phase) * 0.28f
+                 + Mathf.Sin(3f * phase) * 0.07f;
         }
 
-        /// <summary>Yumuşak atak (klik yok) + pürüzsüz iniş zarfı.</summary>
+        /// <summary>Melodic: yumuşak atak, uzun sus → ship/complete/fail için.</summary>
         static float Env(int i, int n)
         {
             float u = (float)i / n;
-            float a = u < 0.1f ? Mathf.SmoothStep(0f, 1f, u / 0.1f) : 1f;   // ~10% yumuşak atak
-            return a * Mathf.Pow(1f - u, 1.6f);                            // yumuşak, hızlı sönüm
+            float a = u < 0.04f ? u / 0.04f : 1f;
+            return a * Mathf.Pow(1f - u, 1.1f);
         }
 
-        static AudioClip Tone(float freq, float dur, float vol)
+        /// <summary>Percussive: 1 ms anti-click fade + hızlı exp decay → tok vuruş hissi.</summary>
+        static float EnvHit(int i, int n)
+        {
+            float u = (float)i / n;
+            float a = i < 44 ? (float)i / 44f : 1f;
+            return a * Mathf.Exp(-7f * u);
+        }
+
+        static AudioClip Tone(float freq, float dur, float vol, bool hit = false)
         {
             int n = Mathf.Max(1, (int)(Rate * dur));
             var data = new float[n];
             for (int i = 0; i < n; i++)
             {
                 float ph = 2f * Mathf.PI * freq * ((float)i / Rate);
-                data[i] = Voice(ph) * vol * Env(i, n);
+                data[i] = Voice(ph) * vol * (hit ? EnvHit(i, n) : Env(i, n));
             }
             return MakeClip(data);
         }
 
-        static AudioClip Sweep(float f0, float f1, float dur, float vol)
+        static AudioClip Sweep(float f0, float f1, float dur, float vol, bool hit = false)
         {
             int n = Mathf.Max(1, (int)(Rate * dur));
             var data = new float[n];
@@ -99,13 +109,13 @@ namespace CardFactory.Feedback
             {
                 float f = Mathf.Lerp(f0, f1, (float)i / n);
                 phase += 2f * Mathf.PI * f / Rate;
-                data[i] = Voice(phase) * vol * Env(i, n);
+                data[i] = Voice(phase) * vol * (hit ? EnvHit(i, n) : Env(i, n));
             }
             return MakeClip(data);
         }
 
-        /// <summary>Arpej: her nota kendi pluck zarfıyla → ka-ching / fanfar / iniş.</summary>
-        static AudioClip Arp(float[] freqs, float noteDur, float vol)
+        /// <summary>Arpej: her nota kendi zarfıyla → ka-ching / fanfar / iniş.</summary>
+        static AudioClip Arp(float[] freqs, float noteDur, float vol, bool hit = false)
         {
             int seg = Mathf.Max(1, (int)(Rate * noteDur));
             int n = seg * freqs.Length;
@@ -114,7 +124,7 @@ namespace CardFactory.Feedback
                 for (int j = 0; j < seg; j++)
                 {
                     float ph = 2f * Mathf.PI * freqs[k] * ((float)j / Rate);
-                    data[k * seg + j] = Voice(ph) * vol * Env(j, seg);
+                    data[k * seg + j] = Voice(ph) * vol * (hit ? EnvHit(j, seg) : Env(j, seg));
                 }
             return MakeClip(data);
         }
