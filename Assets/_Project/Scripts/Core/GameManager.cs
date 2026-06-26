@@ -65,7 +65,7 @@ namespace CardFactory.Core
         void Win()
         {
             State = GameState.Won;
-            Sfx.Play("complete");
+            Sfx.Play("complete", 1.0f);
             Juice.CameraPunch(0.3f);
             Debug.Log("[GameManager] LEVEL COMPLETE — tüm kartlar bitti.");
         }
@@ -80,7 +80,7 @@ namespace CardFactory.Core
         {
             if (State != GameState.Playing) return;
             State = GameState.Lost;
-            Sfx.Play("fail");
+            Sfx.Play("fail", 1.0f);
             Sfx.Haptic();
             Debug.Log("[GameManager] LEVEL FAILED — dock doldu.");
         }

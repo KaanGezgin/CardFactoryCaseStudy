@@ -20,6 +20,7 @@ namespace CardFactory.Core
     public class AdDirector : MonoBehaviour
     {
         public KeyCode startKey = KeyCode.A;
+        public float   startDelay = 3f;   // A'ya basınca reklam bu kadar sn SONRA başlar (kaydı hazırlamak için pay)
 
         bool running;
 
@@ -42,10 +43,18 @@ namespace CardFactory.Core
         {
             if (running) return;
             running = true;
+            StartCoroutine(RunAd());
+        }
+
+        IEnumerator RunAd()
+        {
+            // A'ya basınca reklam HEMEN başlamaz → Recorder'ı başlatıp pencereye dönmek için pay.
+            if (startDelay > 0f) yield return new WaitForSeconds(startDelay);
+
             GameBootstrap.AdMode = true;
             GameBootstrap.AdWinnableBoard = false;   // 1. aşama: kazanılamaz fail board
             GameBootstrap.RequestRebuild(0);
-            StartCoroutine(Sequence());
+            yield return Sequence();
         }
 
         // ---------------------------------------------------------------------

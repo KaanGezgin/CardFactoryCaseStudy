@@ -39,20 +39,24 @@ namespace CardFactory.Feedback
                 { "fill",     Arp(new[] { 420f, 630f },             0.07f, 0.74f, hit:true) },         // slota oturma: çift pluck
                 { "dock",     Sweep(400f, 190f,  0.18f, 0.78f, hit:true) },                            // dock düşüş: derin plop
                 { "ship",     Arp(new[] { 330f, 440f, 660f },       0.10f, 0.82f) },                   // sevk: sıcak ka-ching
-                { "complete", Arp(new[] { 330f, 415f, 523f, 659f, 784f }, 0.095f, 0.85f) },            // fanfar (maks 784 Hz)
+                { "complete", ArpRing(new[] { 392f, 523f, 659f, 784f, 1046f }, 0.10f, 0.45f, 0.55f) }, // fanfar: canlı, çınlayan, parlak (az tok)
                 { "warn",     Sweep(260f, 200f,  0.20f, 0.78f, hit:true) },                            // uyarı: alçak düşüş
-                { "fail",     Arp(new[] { 311f, 247f, 185f, 124f }, 0.18f, 0.85f) },                   // fail: derin iniş
+                { "fail",     ArpRing(new[] { 587f, 440f, 349f, 262f }, 0.13f, 0.42f, 0.55f) },        // fail: canlı çınlayan iniş (hafif, az tok)
+                { "tick",     Tone(780f,  0.028f, 0.55f, hit:true) },                                  // kart banda girdi: hafif tık
             };
         }
 
         const float Master = 1.0f;   // genel ses
 
-        public static void Play(string name)
+        public static void Play(string name) => Play(name, 1f);
+
+        /// <summary>volScale: tek seferlik ses ölçeği (örn. çok hafif "tık" için 0.4).</summary>
+        public static void Play(string name, float volScale)
         {
             if (Application.isBatchMode) return;
             var s = Src;
             if (clips.TryGetValue(name, out var c) && c != null)
-                s.PlayOneShot(c, Master);
+                s.PlayOneShot(c, Master * volScale);
         }
 
         public static void Haptic()
@@ -126,6 +130,40 @@ namespace CardFactory.Feedback
                     float ph = 2f * Mathf.PI * freqs[k] * ((float)j / Rate);
                     data[k * seg + j] = Voice(ph) * vol * (hit ? EnvHit(j, seg) : Env(j, seg));
                 }
+            return MakeClip(data);
+        }
+
+        /// <summary>Hafif/parlak ton: temel ağırlıklı + küçük üst kıvılcım, az gövde → AZ TOK.</summary>
+        static float BrightVoice(float phase)
+        {
+            return Mathf.Sin(phase) * 0.80f
+                 + Mathf.Sin(2f * phase) * 0.14f
+                 + Mathf.Sin(4f * phase) * 0.06f;   // 2 oktav üstü kıvılcım = parlaklık (gövde düşük)
+        }
+
+        /// <summary>
+        /// Çınlayan arpej: notalar üst üste biner (legato, step &lt; ring) + uzun yumuşak
+        /// sönüm → CANLI, UZUN, az tok. complete/fail için. Yumuşak soft-clip ile birleşir.
+        /// </summary>
+        static AudioClip ArpRing(float[] freqs, float step, float ring, float vol)
+        {
+            int seg  = Mathf.Max(1, (int)(Rate * step));   // notalar arası aralık
+            int tail = Mathf.Max(1, (int)(Rate * ring));   // her notanın çınlama kuyruğu
+            int n    = seg * (freqs.Length - 1) + tail;
+            var data = new float[n];
+            for (int k = 0; k < freqs.Length; k++)
+            {
+                int start = k * seg;
+                for (int j = 0; j < tail && start + j < n; j++)
+                {
+                    float u   = (float)j / tail;
+                    float a   = j < 220 ? (float)j / 220f : 1f;     // ~5 ms yumuşak atak
+                    float env = a * Mathf.Exp(-3.2f * u);           // uzun, yumuşak sönüm (çınlar)
+                    float ph  = 2f * Mathf.PI * freqs[k] * ((float)j / Rate);
+                    data[start + j] += BrightVoice(ph) * vol * env;
+                }
+            }
+            for (int i = 0; i < n; i++) data[i] = data[i] / (1f + Mathf.Abs(data[i]));   // soft-clip (üst üste binme klip yapmasın)
             return MakeClip(data);
         }
 

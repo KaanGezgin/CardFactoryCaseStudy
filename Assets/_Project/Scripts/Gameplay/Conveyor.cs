@@ -112,6 +112,7 @@ namespace CardFactory.Gameplay
 
             card.transform.localScale = BeltCardScale;
             Juice.PopIn(card.transform, BeltCardScale, 0.12f);
+            Sfx.Play("tick", 0.4f);   // kart süzülmeye başlar başlamaz → anında hafif tık (geç kalmasın)
 
             if (entryPortal != null)
             {
