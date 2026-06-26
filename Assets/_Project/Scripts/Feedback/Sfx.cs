@@ -36,7 +36,8 @@ namespace CardFactory.Feedback
             {
                 { "click",    Tone(820f, 0.09f, 0.42f) },
                 { "send",     Sweep(500f, 880f, 0.16f, 0.38f) },
-                { "fill",     Tone(660f, 0.08f, 0.34f) },
+                { "fill",     Arp(new[] { 620f, 830f }, 0.05f, 0.32f) },   // kutuya oturma: yumuşak iki-ton pluck
+                { "dock",     Sweep(470f, 300f, 0.14f, 0.36f) },           // dock'a düşüş: alçalan yumuşak plop
                 { "ship",     Arp(new[] { 660f, 990f, 1320f }, 0.085f, 0.55f) },   // ka-ching (yumuşak)
                 { "complete", Arp(new[] { 523f, 659f, 784f, 1046f, 1318f }, 0.10f, 0.62f) }, // fanfar
                 { "warn",     Tone(300f, 0.16f, 0.42f) },

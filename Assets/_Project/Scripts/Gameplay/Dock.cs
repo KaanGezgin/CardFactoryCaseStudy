@@ -457,7 +457,7 @@ namespace CardFactory.Gameplay
                     Juice.PunchScale(card.transform, DockCardScale, 0.12f, 0.12f);
                 }
             });
-            Sfx.Play("fill");
+            Sfx.Play("dock");
 
             if (Count >= Capacity && gm != null)
                 gm.OnDockFull();
