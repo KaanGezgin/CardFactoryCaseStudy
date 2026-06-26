@@ -67,7 +67,7 @@ namespace CardFactory.Core
             // Teklif widget'ı: "+4 slots / 400" → "New Dock / 1000".
             Object.FindFirstObjectByType<Dock>()?.ShowFailOffer();
             // Ses GameManager.OnDockFull'da çalıyor (tek sefer). Glow kapalı (beğenilmedi); X açık.
-            Hud()?.ShowAdMessage("LEVEL FAILED", "Can you do it?", FailFront, FailTint,
+            Hud()?.ShowAdMessage("LEVEL FAILED", "So close!", FailFront, FailTint,
                 showClose: true);
             yield return new WaitForSeconds(1.9f);
             Hud()?.HideAdMessage();

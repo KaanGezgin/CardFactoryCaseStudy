@@ -96,6 +96,8 @@ namespace CardFactory.Gameplay
         public void OnTapped()
         {
             if (IsEmpty) return;
+            // Oyun bittiyse (fail/win) artık kart gönderme — fail anında oyun anında dursun.
+            if (GameManager.Instance != null && GameManager.Instance.State != GameState.Playing) return;
 
             CardColor top = cards[cards.Count - 1];
             int groupSize = 0;

@@ -243,14 +243,16 @@ namespace CardFactory.Gameplay
             grooveRoot.SetParent(transform, false);
 
             var grooveMat = GameBootstrap.NewLitMaterial(new UnityEngine.Color(0.05f, 0.06f, 0.08f));
+            // Bar'ın ÖN YÜZÜNÜN önüne yerleştir (yoksa barın içinde kalıp görünmez → tek blok gibi durur).
+            float grooveZ = SlotFrontZ - FillDepth * 0.5f - 0.02f;
             for (int k = 1; k < capacity; k++)
             {
                 float y = FillBottomY + (k / (float)capacity) * FillH;
                 var g = ProcMesh.RoundedCube("Groove_" + k);
                 DestroyCollider(g);
                 g.transform.SetParent(grooveRoot, false);
-                g.transform.localPosition = new Vector3(0f, y, SlotFrontZ - 0.015f);
-                g.transform.localScale = new Vector3(FillWidth + 0.02f, 0.03f, 0.05f);
+                g.transform.localPosition = new Vector3(0f, y, grooveZ);
+                g.transform.localScale = new Vector3(FillWidth + 0.06f, 0.05f, 0.07f);
                 g.GetComponent<Renderer>().sharedMaterial = grooveMat;
             }
         }
