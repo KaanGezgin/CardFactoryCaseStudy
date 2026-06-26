@@ -58,14 +58,13 @@ namespace CardFactory.Gameplay
             transform.rotation = Quaternion.Euler(LeanBack, 0f, 0f);
 
             var frameColor = new Color(0.14f, 0.16f, 0.19f);
-            var trimColor = new Color(0.22f, 0.24f, 0.28f);
 
             // Ana konteyner gövdesi — dikey dikdörtgen kasa.
             var bodyGo = ProcMesh.RoundedCube("ContainerBody");
             DestroyCollider(bodyGo);
             bodyGo.transform.SetParent(transform, false);
-            bodyGo.transform.localPosition = new Vector3(0f, BodyHeight * 0.5f, 0.02f);
-            bodyGo.transform.localScale = new Vector3(0.92f, BodyHeight, 0.48f);
+            bodyGo.transform.localPosition = new Vector3(0f, 0.7304f, 0.02f);
+            bodyGo.transform.localScale = new Vector3(0.92f, 1.23916f, 0.48f);
             bodyRend = bodyGo.GetComponent<Renderer>();
             bodyRend.sharedMaterial = GameBootstrap.NewLitMaterial(frameColor);
 
@@ -79,21 +78,14 @@ namespace CardFactory.Gameplay
             lidMat.SetFloat("_Smoothness", 0.8f);
             topRail.GetComponent<Renderer>().sharedMaterial = lidMat;
 
-            // Alt taban şeridi.
-            var baseRail = ProcMesh.RoundedCube("ContainerBase");
-            DestroyCollider(baseRail);
-            baseRail.transform.SetParent(transform, false);
-            baseRail.transform.localPosition = new Vector3(0f, 0.05f, 0.0f);
-            baseRail.transform.localScale = new Vector3(1.0f, 0.12f, 0.56f);
-            baseRail.GetComponent<Renderer>().sharedMaterial = GameBootstrap.NewLitMaterial(trimColor);
-            // (Oluklu şeritler + köşe direkleri kaldırıldı → uzaktan temiz konteyner okunur.)
+            // (ContainerBase + oluklu şeritler + köşe direkleri kaldırıldı → temiz konteyner.)
 
             // Hedef-renk durum lambası — üstte parlak KÜRE (referans gibi).
             var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             markerGo.name = "ContainerLamp";
             DestroyCollider(markerGo);
             markerGo.transform.SetParent(transform, false);
-            markerGo.transform.localPosition = new Vector3(0f, BodyHeight + 0.18f, -0.06f);
+            markerGo.transform.localPosition = new Vector3(0f, 1.53f, -0.441f);
             markerGo.transform.localScale = Vector3.one * LampSize;
             markerRend = markerGo.GetComponent<Renderer>();
             marker = markerGo.transform;
