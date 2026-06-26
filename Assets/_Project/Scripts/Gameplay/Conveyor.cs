@@ -25,6 +25,7 @@ namespace CardFactory.Gameplay
         float endDist;
         const float Spacing = 0.78f;
         const float CardLift = 0.8f;    // dik kart belt yüzeyinin üstünde dursun
+        const float BeltTurnSpeed = 540f;   // viraj takibi: kart ilerleme yönüne dönme hızı (°/s)
 
         // Bant kartı DİK durur (domino): X=genişlik, Y=yükseklik, Z=bant yönünde ince.
         static readonly Vector3 BeltCardScale = new Vector3(1f, 1.45f, 0.25f);
@@ -128,7 +129,12 @@ namespace CardFactory.Gameplay
                 yield return ArcMove(card, origin, beltEntry, 3.2f, 0.5f);
             }
 
-            if (card != null) { card.transform.position = beltEntry; card.Entering = false; }
+            if (card != null)
+            {
+                card.transform.position = beltEntry;
+                card.transform.rotation = Quaternion.LookRotation(path.TangentAt(0f), Vector3.up);  // giriş yönüyle başla
+                card.Entering = false;
+            }
         }
 
         /// <summary>Kartı from→to parabolik yay ile taşır (height = tepe yüksekliği).</summary>
@@ -164,6 +170,11 @@ namespace CardFactory.Gameplay
                 float target = Mathf.Min(endDist, maxAllowed);
                 card.BeltDist = Mathf.MoveTowards(card.BeltDist, target, cfg.conveyorSpeed * Time.deltaTime);
                 card.transform.position = WorldAt(card.BeltDist);
+
+                // Viraj takibi: kartı yolun ilerleme yönüne (teğet) yumuşakça döndür.
+                var want = Quaternion.LookRotation(path.TangentAt(card.BeltDist), Vector3.up);
+                card.transform.rotation = Quaternion.RotateTowards(
+                    card.transform.rotation, want, BeltTurnSpeed * Time.deltaTime);
             }
 
             for (int i = belt.Count - 1; i >= 0; i--)

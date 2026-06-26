@@ -35,6 +35,17 @@ namespace CardFactory.Gameplay
             return Vector3.Lerp(pts[i - 1], pts[i], t);
         }
 
+        /// <summary>İlerleme (artan d) yönündeki birim teğet → kart bu yöne döner (viraj takibi).</summary>
+        public Vector3 TangentAt(float d)
+        {
+            if (pts.Count < 2) return Vector3.forward;
+            d = Mathf.Clamp(d, 0f, Length);
+            int i = 1;
+            while (i < pts.Count - 1 && cum[i] < d) i++;   // d'nin düştüğü segment [i-1, i]
+            Vector3 dir = pts[i] - pts[i - 1];
+            return dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
+        }
+
         /// <summary>Verilen dünya noktasına en yakın vertex'in yay-uzunluğu.</summary>
         public float NearestDist(Vector3 world)
         {
