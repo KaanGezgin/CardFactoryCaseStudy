@@ -10,9 +10,12 @@ Editor** and saved with the scene; the generated world is the starting point, no
 - **Target:** mobile portrait; captured in the Editor at **1080×1920**
 - **No external assets/packages** except `com.unity.recorder` (for video capture). All meshes are runtime
   primitives / procedural rounded cubes, all materials are `URP/Lit` created in code, all SFX are procedural.
-- **Repository:** if the bundled project won't open or build for any reason, clone a fresh copy from
+- **Project source (GitHub):** the submission package contains this README, the two videos and the benchmark —
+  **the Unity project itself is delivered via GitHub**, not bundled in the ZIP. Clone it from
   **[github.com/KaanGezgin/CardFactoryCaseStudy](https://github.com/KaanGezgin/CardFactoryCaseStudy)**
-  (`git clone https://github.com/KaanGezgin/CardFactoryCaseStudy.git`).
+  (`git clone https://github.com/KaanGezgin/CardFactoryCaseStudy.git`). It was kept out of the ZIP on purpose:
+  stripping `Library/` from a copied project reverted some of the hand-tuned, baked scene state, so the repo is the
+  faithful, source-of-truth copy.
 
 ---
 
@@ -23,6 +26,11 @@ Editor** and saved with the scene; the generated world is the starting point, no
    - If you see a pink/magenta material, add **Universal Render Pipeline/Lit** and **Universal Render Pipeline/Unlit**
      to *Project Settings → Graphics → Always Included Shaders*.
 3. Play in the **Game view at a 1080×1920 (portrait)** aspect for the intended framing.
+
+> **If the scene doesn't look like the final video** (object framing/positions, belt color, post-processing tint),
+> it's the **baked-world state**: the hand-tuned look lives in the saved scene, and a fresh import can occasionally
+> drop it. Fix it in Edit mode with **Tools → Card Factory → Bake World Into Scene** (then **Ctrl+S**), or, to keep
+> your manual tweaks, **Tools → Card Factory → Rebake Belt + Color (Keep Rest)**. See *Persisting the world* below.
 
 ### Controls
 - **Left click / tap** a card stack → sends the top same-color group onto the conveyor.
