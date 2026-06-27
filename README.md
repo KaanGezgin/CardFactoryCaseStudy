@@ -11,7 +11,7 @@ Editor** and saved with the scene; the generated world is the starting point, no
 - **No external assets/packages** except `com.unity.recorder` (for video capture). All meshes are runtime
   primitives / procedural rounded cubes, all materials are `URP/Lit` created in code, all SFX are procedural.
 - **Project source (GitHub):** the submission package contains this README, the two videos and the benchmark —
-  **the Unity project itself is delivered via GitHub**, not bundled in the ZIP. Clone it from
+  **the Unity project itself is delivered via GitHub**, Clone it from
   **[github.com/KaanGezgin/CardFactoryCaseStudy](https://github.com/KaanGezgin/CardFactoryCaseStudy)**
   (`git clone https://github.com/KaanGezgin/CardFactoryCaseStudy.git`). It was kept out of the ZIP on purpose:
   stripping `Library/` from a copied project reverted some of the hand-tuned, baked scene state, so the repo is the
