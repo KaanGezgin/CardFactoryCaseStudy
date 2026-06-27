@@ -81,7 +81,13 @@ long-term should ideally live in code defaults).
 - Camera: top-down 2.5D angle framed for portrait; URP post-processing (bloom, vignette, color grading, tonemapping).
 - Satisfying feedback: scale-pop / squash, particle bursts on ship, camera punch, and a full set of **procedural
   SFX synthesized in code** (no audio files) + haptics — punchy click/whoosh/plop cues, a soft *tick* as each card
-  enters the belt, a lively ka-ching on ship, and bright ringing win/fail stings — plus a dock "tension" pulse as it fills.
+  enters the belt, a lively ka-ching on ship, a bright ringing win fanfare, and a gentle descending "you failed" sting —
+  plus a dock "tension" pulse as it fills.
+- The **fail sting is deliberately designed** from researched fail-sound principles: a *descending* pitch (culturally
+  read as defeat) on a consonant **C-minor** arpeggio that resolves into a low note **drooping downward** (a resigned
+  "sad-trombone" sink), played on a warm sine-based voice with the harsh highs and sub-bass mud rolled off, a soft
+  ~20 ms attack and a long decay, kept below the other cues in the mix — so it clearly says "you lost" without being
+  jarring or annoying.
 - Match-Factory-style polish: soft contact shadows under objects, glossy bins with a rising segmented fill bar +
   status lamp, identified conveyor with flowing chevrons, thicker cards, an animated **background factory**
   (running belts, moving boxes, silos), and a gate with an entry slot + front exit mouth + an X/20 progress bar.
