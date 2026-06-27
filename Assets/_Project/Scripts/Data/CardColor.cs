@@ -4,7 +4,7 @@ using UnityEngine;
 namespace CardFactory.Data
 {
     /// <summary>
-    /// Kart renk kimlikleri. 4-6 renk arası. Sayısal değer = palet indeksidir.
+    /// Card color identities. Between 4 and 6 colors. The numeric value is the palette index.
     /// </summary>
     public enum CardColor
     {
@@ -17,12 +17,12 @@ namespace CardFactory.Data
     }
 
     /// <summary>
-    /// CardColor -> UnityEngine.Color eşlemesi. Palet GameConfig üzerinden
-    /// override edilebilir; burada makul defaultlar tutulur.
+    /// CardColor -> UnityEngine.Color mapping. The palette can be overridden via GameConfig;
+    /// sensible defaults are kept here.
     /// </summary>
     public static class CardPalette
     {
-        // Doygun ama göz yormayan defaultlar.
+        // Saturated but easy-on-the-eyes defaults.
         static readonly Dictionary<CardColor, Color> Map = new()
         {
             { CardColor.Red,    new Color(0.90f, 0.22f, 0.24f) },

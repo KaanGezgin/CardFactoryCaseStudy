@@ -11,14 +11,14 @@ using UnityEngine.Rendering.Universal;
 namespace CardFactory.Core
 {
     /// <summary>
-    /// Boş sahnede Play'e basınca tüm oyunu KODDAN kurar. U-şekilli konveyör,
-    /// ortadaki kutular, dock tepsisi, alttaki desteler ve dünya konumlu UI.
+    /// Builds the whole game FROM CODE when Play is pressed in an empty scene. U-shaped conveyor,
+    /// center bins, dock tray, the stacks at the bottom, and world-positioned UI.
     /// </summary>
     public static class GameBootstrap
     {
         const float GroundSize = 18f;
 
-        // U-yol geometrisi
+        // U-path geometry
         const float LegX = 2.8f;
         const float ZTop = 5.5f;
         const float ZBot = 1.0f;
@@ -28,24 +28,24 @@ namespace CardFactory.Core
         const float StackZ = -6.0f;
         const float DockZ = -3.0f;
 
-        public const float CameraPitch = 62f;   // kamera eğimi; 3B etiketler bununla kameraya bakar
+        public const float CameraPitch = 62f;   // camera tilt; 3D labels face the camera with this
 
         static int? pendingBuild;
 
-        /// <summary>Reklam modu (AdDirector aktif): demo board + otomatik el; normal input/HUD bastırılır.</summary>
+        /// <summary>Ad mode (AdDirector active): demo board + automatic hand; normal input/HUD suppressed.</summary>
         public static bool AdMode;
 
-        /// <summary>Reklamda hangi demo board: true → kazanılabilir (success), false → kazanılamaz (fail).</summary>
+        /// <summary>Which demo board in the ad: true → winnable (success), false → unwinnable (fail).</summary>
         public static bool AdWinnableBoard;
 
-        // Kalıcı ortam (her level'de yeniden yaratılmaz) referansları.
+        // References to the persistent world (not recreated each level).
         static GameObject levelRoot;
         static Dock dock;
         static FactoryGate gate;
         static BeltPath path;
         static HudController hud;
-        static Transform[] stackAnchors;   // kartların (destelerin) yaratılacağı yerler
-        static Transform[] binAnchors;     // ortadaki kutuların yaratılacağı yerler
+        static Transform[] stackAnchors;   // where the cards (stacks) are created
+        static Transform[] binAnchors;     // where the center bins are created
 
         static readonly Vector3[] BinSlots =
         {
@@ -60,12 +60,12 @@ namespace CardFactory.Core
             runnerGo.AddComponent<GameRunner>();
             Object.DontDestroyOnLoad(runnerGo);
 
-            AdMode = GameConfig.Default.adMode;   // config'te açıksa otomatik reklam
+            AdMode = GameConfig.Default.adMode;   // auto-ad if enabled in config
 
             BuildWorld();
             BuildLevel(0);
 
-            // Reklam yönetmeni: kalıcı, idle bekler; 'A' tuşu (veya adMode) ile başlar.
+            // Ad director: persistent, idles; starts with the 'A' key (or adMode).
             var adGo = new GameObject("AdDirector");
             adGo.AddComponent<AdDirector>();
             Object.DontDestroyOnLoad(adGo);
@@ -82,9 +82,9 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// KALICI ortamı bir kez kurar: kamera, ışık, zemin, U-yol + baş/son objeler,
-        /// kapı (0/20 ekranı), dock tepsisi + slotları + teklif + fail ışığı. Bunlar
-        /// level değiştikçe yeniden yaratılmaz.
+        /// Builds the PERSISTENT world once: camera, light, ground, U-path + start/end objects,
+        /// gate (0/20 display), dock tray + slots + offer + fail glow. These are not recreated
+        /// when the level changes.
         /// </summary>
         static void BuildWorld()
         {
@@ -94,25 +94,23 @@ namespace CardFactory.Core
                 var marker = existing.GetComponent<WorldPersistence>();
                 if (marker == null || !marker.rebuildOnPlay)
                 {
-                    ReuseWorld(existing);   // mevcut sahne objeleri korunur (yeniden yaratılmaz)
-                    Debug.Log("[GameBootstrap] Mevcut dünya korundu (yeniden yaratılmadı).");
+                    ReuseWorld(existing);   // keep existing scene objects (don't recreate)
                     return;
                 }
-                Object.DestroyImmediate(existing);  // rebuildOnPlay açık → baştan kur
+                Object.DestroyImmediate(existing);  // rebuildOnPlay on → rebuild from scratch
             }
 
             CleanScene();
             BuildWorldObjects();
-            Debug.Log("[GameBootstrap] Kalıcı ortam (runtime) kuruldu.");
         }
 
         /// <summary>
-        /// Sahnede var olan dünyayı yeniden YARATMADAN, GÖRÜNÜŞÜNÜ DEĞİŞTİRMEDEN kullanır:
-        /// sadece referansları yeniden bağlar ve anchor'ları bulur. Inspector düzenlemeleri korunur.
+        /// Reuses the existing world WITHOUT recreating it and WITHOUT changing its appearance:
+        /// only rebinds references and finds the anchors. Inspector edits are preserved.
         /// </summary>
         static void ReuseWorld(GameObject world)
         {
-            path = new BeltPath(BuildUPath());   // yol verisi (serialize edilmez)
+            path = new BeltPath(BuildUPath());   // path data (not serialized)
             dock = world.GetComponentInChildren<Dock>(true);
             gate = world.GetComponentInChildren<FactoryGate>(true);
             hud = world.GetComponentInChildren<HudController>(true);
@@ -132,7 +130,7 @@ namespace CardFactory.Core
                 if (al != null && !al.transform.IsChildOf(world.transform))
                     Object.DestroyImmediate(al.gameObject);
 
-            ApplyPolish(world);   // cila runtime'da da uygulanır (re-bake gerekmeden)
+            ApplyPolish(world);   // polish is applied at runtime too (no re-bake needed)
         }
 
         static void ClearAnchorChildren(Transform[] anchors)
@@ -159,8 +157,8 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// Kalıcı ortam objelerini oluşturur (CleanScene/runner YOK). Hem runtime
-        /// BuildWorld hem de Editör 'Bake World' aracı bunu kullanır.
+        /// Creates the persistent world objects (NO CleanScene/runner). Used by both the runtime
+        /// BuildWorld and the Editor 'Bake World' tool.
         /// </summary>
         public static GameObject BuildWorldObjects()
         {
@@ -182,12 +180,12 @@ namespace CardFactory.Core
             dock.transform.SetParent(world.transform, false);
             dock.Init(config.dockCapacity, DockZ);
 
-            // Kazan/kaybet paneli de KALICI (sahnede kalır).
+            // The win/lose panel is PERSISTENT too (stays in the scene).
             hud = new GameObject("HudController").AddComponent<HudController>();
             hud.transform.SetParent(world.transform, false);
             hud.Init();
 
-            // Kart desteleri ve ortadaki kutular için ANCHOR'lar (boş, taşınabilir).
+            // ANCHORS for the card stacks and the center bins (empty, movable).
             stackAnchors = BuildStackAnchors(world.transform);
             binAnchors = BuildBinAnchors(world.transform);
 
@@ -227,8 +225,8 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// Editör 'Bake World' için: eski baked dünyayı + fazla kamera/listener'ı
-        /// temizler ve kalıcı ortamı SAHNEYE gerçek obje olarak kurar (edit mode).
+        /// For the Editor 'Bake World': clears the old baked world + extra cameras/listeners and
+        /// builds the persistent world into the SCENE as real objects (edit mode).
         /// </summary>
         public static GameObject BakeWorld()
         {
@@ -243,16 +241,15 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// PER-LEVEL içeriği (yeniden) kurar: yöneticiler, kutular, konveyör+kartlar,
-        /// desteler, input, ghost pointer, HUD paneli. Kalıcı ortam korunur; dock/kapı
-        /// durumu sıfırlanır.
+        /// (Re)builds the PER-LEVEL content: managers, bins, conveyor+cards, stacks, input, ghost
+        /// pointer, HUD panel. The persistent world is kept; dock/gate state is reset.
         /// </summary>
         public static void BuildLevel(int levelIndex)
         {
             if (dock == null || gate == null || path == null) BuildWorld();
             if (levelRoot != null) Object.DestroyImmediate(levelRoot);
 
-            // Eski kart/kutu içeriğini anchor'lardan temizle (anchor'lar kalır).
+            // Clear the old card/bin content from the anchors (anchors remain).
             ClearAnchorChildren(stackAnchors);
             ClearAnchorChildren(binAnchors);
 
@@ -265,7 +262,7 @@ namespace CardFactory.Core
                 : DefaultLevels.Get(levelIndex);
             levelRoot = new GameObject("CardFactoryLevel");
 
-            dock.SetTension(config.dockTensionPulse);   // reklam için saklı (şimdilik kapalı)
+            dock.SetTension(config.dockTensionPulse);   // reserved for the ad (off for now)
 
             var gm = new GameObject("GameManager").AddComponent<GameManager>();
             gm.transform.SetParent(levelRoot.transform, false);
@@ -274,16 +271,16 @@ namespace CardFactory.Core
 
             var binMgr = new GameObject("BinManager").AddComponent<BinManager>();
             binMgr.transform.SetParent(levelRoot.transform, false);
-            binMgr.Init(config, level, gm, binAnchors, path);   // kutular bin anchor'ları altında
+            binMgr.Init(config, level, gm, binAnchors, path);   // bins under the bin anchors
 
             var conveyor = new GameObject("Conveyor").AddComponent<Conveyor>();
             conveyor.transform.SetParent(levelRoot.transform, false);
             conveyor.Init(config, gm, binMgr, dock, gate, path);
 
-            var stacks = BuildStacks(level, conveyor);   // kartlar stack anchor'ları altında
+            var stacks = BuildStacks(level, conveyor);   // cards under the stack anchors
             gm.SetSystems(stacks, conveyor);
 
-            // Reklam modunda mouse input'u yok (AdDirector sürer).
+            // No mouse input in ad mode (AdDirector drives).
             InputController input = null;
             if (!AdMode)
             {
@@ -294,8 +291,8 @@ namespace CardFactory.Core
 
             if (config.showHandPointer || AdMode)
             {
-                // Karışık destelerde binColorOrder[0] hiçbir tepede olmayabilir.
-                // Geçerli ilk hamleyi göster: tepesi binColorOrder'da EN ERKEN gelen deste.
+                // With mixed stacks, binColorOrder[0] may not be on any top.
+                // Show the first valid move: the stack whose top comes EARLIEST in binColorOrder.
                 CardStack target = null;
                 int bestIdx = int.MaxValue;
                 foreach (var s in stacks)
@@ -315,16 +312,15 @@ namespace CardFactory.Core
                 }
             }
 
-            Debug.Log($"[GameBootstrap] Level {levelIndex + 1} içeriği kuruldu (kart {level.TotalCards}).");
         }
 
         static List<Vector3> BuildUPath()
         {
             var pts = new List<Vector3>();
-            // Sağ bacak: üst → alt
+            // Right leg: top → bottom
             for (float z = ZTop; z > ZBot; z -= 0.4f)
                 pts.Add(new Vector3(LegX, BeltY, z));
-            // Alt yay: sağ → sol
+            // Bottom arc: right → left
             const int seg = 14;
             for (int i = 0; i <= seg; i++)
             {
@@ -333,7 +329,7 @@ namespace CardFactory.Core
                 float z = ZBot - Bulge * Mathf.Sin(t);
                 pts.Add(new Vector3(x, BeltY, z));
             }
-            // Sol bacak: alt → üst
+            // Left leg: bottom → top
             for (float z = ZBot; z <= ZTop; z += 0.4f)
                 pts.Add(new Vector3(-LegX, BeltY, z));
             return pts;
@@ -346,8 +342,8 @@ namespace CardFactory.Core
             var beltRoot = new GameObject("Belt");
             beltRoot.transform.SetParent(parent, false);
 
-            var surfaceMat = NewLitMaterial(new Color(0.47f, 0.53f, 0.62f));   // daha açık mavi-gri (referans)
-            var railMat = NewLitMaterial(new Color(0.93f, 0.96f, 0.99f));     // temiz beyaz kenar ray
+            var surfaceMat = NewLitMaterial(new Color(0.47f, 0.53f, 0.62f));   // lighter blue-gray (reference)
+            var railMat = NewLitMaterial(new Color(0.93f, 0.96f, 0.99f));     // clean white side rail
             const float railW = 0.18f;
 
             for (int i = 0; i < pts.Count - 1; i++)
@@ -362,7 +358,7 @@ namespace CardFactory.Core
                 Quaternion rot = Quaternion.LookRotation(fwd, Vector3.up);
                 Vector3 side = Vector3.Cross(Vector3.up, fwd).normalized;
 
-                // Bant yüzeyi (düz tutulur; uzun parçalarda yuvarlatma istenmez).
+                // Belt surface (kept flat; rounding is not wanted on long parts).
                 var seg = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 seg.name = "BeltSeg";
                 var scol = seg.GetComponent<Collider>();
@@ -373,7 +369,7 @@ namespace CardFactory.Core
                 seg.transform.localScale = new Vector3(BeltWidth, 0.16f, len + 0.14f);
                 seg.GetComponent<Renderer>().sharedMaterial = surfaceMat;
 
-                // İki yan korkuluk.
+                // Two side rails.
                 for (int s = -1; s <= 1; s += 2)
                 {
                     var rail = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -394,7 +390,7 @@ namespace CardFactory.Core
 
         static void BuildBeltChevrons(Transform beltRoot, List<Vector3> pts)
         {
-            var chevMat = NewLitMaterial(new Color(0.34f, 0.39f, 0.48f));   // açık bantta okunan koyu/mat ok
+            var chevMat = NewLitMaterial(new Color(0.34f, 0.39f, 0.48f));   // dark/matte arrow readable on the light belt
             var flowGo = new GameObject("BeltFlow");
             flowGo.transform.SetParent(beltRoot, false);
             var flow = flowGo.AddComponent<BeltFlow>();
@@ -429,13 +425,13 @@ namespace CardFactory.Core
 
         static FactoryGate BuildGate(Transform parent, GameConfig config, Vector3 startPt)
         {
-            // Gövde belt başının ARKASINDA durur; ön yüzü ≈ belt başı. Kartlar ön
-            // yüzdeki AĞIZDAN çıkar (içinden geçmez). Büyütüldü → sayaç kartların üstünde kalır.
+            // The body sits BEHIND the belt start; its front face ≈ belt start. Cards exit through
+            // the MOUTH on the front face (they don't pass through it). Enlarged → counter stays above the cards.
             const float depth = 1.05f, bodyH = 1.95f;
-            // Gövde, kart doğum noktasının (startPt.z) ön yüzü onun hemen ARKASINA gelecek
-            // şekilde durur → kart ağzın içinden çıkmış gibi görünür (önünde takılı kalmaz).
+            // The body sits so that its front face is just BEHIND the card spawn point (startPt.z)
+            // → a card looks like it came out of the mouth (it doesn't get stuck in front of it).
             float gateZ = startPt.z + 0.5f;
-            float frontZ = gateZ - depth * 0.5f;     // ön yüz (kart doğum noktasının hemen arkası)
+            float frontZ = gateZ - depth * 0.5f;     // front face (just behind the card spawn point)
             var gateColor = new Color(0.24f, 0.28f, 0.48f);
 
             var body = ProcMesh.RoundedCube("FactoryGate");
@@ -445,7 +441,7 @@ namespace CardFactory.Core
             body.transform.localScale = new Vector3(2.15f, bodyH, depth);
             body.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(gateColor);
 
-            // Açık mavi üst trim
+            // Light-blue top trim
             var trim = ProcMesh.RoundedCube("GateTrim");
             DestroyColliderGO(trim);
             trim.transform.SetParent(parent, false);
@@ -453,7 +449,7 @@ namespace CardFactory.Core
             trim.transform.localScale = new Vector3(2.28f, 0.2f, depth + 0.12f);
             trim.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.70f, 0.78f, 0.92f));
 
-            // Üst kart giriş ağzı (dekoratif): koyu yarık + 2 açık dudak.
+            // Top card entry slot (decorative): dark slot + 2 light lips.
             var slot = ProcMesh.RoundedCube("GateSlot");
             DestroyColliderGO(slot);
             slot.transform.SetParent(parent, false);
@@ -472,8 +468,8 @@ namespace CardFactory.Core
                 lip.GetComponent<Renderer>().sharedMaterial = lipMat;
             }
 
-            // ÖN ÇIKIŞ AĞZI — kartın DOĞDUĞU noktaya (startPt.z) hizalı: koyu yuva kartı
-            // çerçeveler, kart bu ağzın içinden öne (−z) doğru çıkar.
+            // FRONT EXIT MOUTH — aligned to the card SPAWN point (startPt.z): a dark recess frames
+            // the card, and the card exits forward (−z) through this mouth.
             float mouthZ = startPt.z;
             var mouth = ProcMesh.RoundedCube("GateMouth");
             DestroyColliderGO(mouth);
@@ -482,7 +478,7 @@ namespace CardFactory.Core
             mouth.transform.localScale = new Vector3(1.5f, 0.78f, 0.18f);
             mouth.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.04f, 0.05f, 0.08f));
 
-            // Çerçeve (kartın ÖNÜNDE, açıklığı sınırlar): üst overhang dudak + 2 yan pervaz.
+            // Frame (IN FRONT of the card, bounding the opening): top overhang lip + 2 side jambs.
             var mLip = ProcMesh.RoundedCube("GateMouthLip");
             DestroyColliderGO(mLip);
             mLip.transform.SetParent(parent, false);
@@ -500,7 +496,7 @@ namespace CardFactory.Core
                 jamb.GetComponent<Renderer>().sharedMaterial = lipMat;
             }
 
-            // Ekran (ön yüz üst, kameraya dönük) — sayaç + progress kartların ÜSTÜNDE.
+            // Screen (top of the front face, facing the camera) — counter + progress ABOVE the cards.
             var screen = ProcMesh.RoundedCube("GateScreen");
             DestroyColliderGO(screen);
             screen.transform.SetParent(parent, false);
@@ -512,7 +508,7 @@ namespace CardFactory.Core
 
             var gate = body.AddComponent<FactoryGate>();
 
-            // Ekrana gömülü 3B sayaç (kameraya dönük, Play'de kaymaz).
+            // 3D counter embedded in the screen (camera-facing, no drift on Play).
             var counterAnchor = new GameObject("GateCounter");
             counterAnchor.transform.SetParent(parent, false);
             counterAnchor.transform.position = screen.transform.position + new Vector3(0f, 0.15f, -0.16f);
@@ -520,7 +516,7 @@ namespace CardFactory.Core
             var counter = MakeWorldText("0/20", counterAnchor.transform, Vector3.zero,
                 0.07f, Color.white, 90);
 
-            // Sayaç altı progress bar: koyu track + sol-kenardan dolan renk çubuğu.
+            // Progress bar under the counter: dark track + a color bar filling from the left edge.
             var progAnchor = new GameObject("GateProgress");
             progAnchor.transform.SetParent(parent, false);
             progAnchor.transform.position = screen.transform.position + new Vector3(0f, -0.16f, -0.16f);
@@ -544,7 +540,7 @@ namespace CardFactory.Core
             return gate;
         }
 
-        /// <summary>Dünya-uzayı 3B yazı (TextMesh) üretir. Objelere gömülü etiketler için.</summary>
+        /// <summary>Creates world-space 3D text (TextMesh). For labels embedded in objects.</summary>
         public static TextMesh MakeWorldText(string text, Transform parent, Vector3 localPos,
                                              float characterSize, Color color, int fontSize)
         {
@@ -569,7 +565,7 @@ namespace CardFactory.Core
             return tm;
         }
 
-        /// <summary>Geniş, yumuşak parlama halesi — DockGlow / bloom için (dar MakeRadialSprite'tan daha geniş yayılır).</summary>
+        /// <summary>Wide, soft glow halo — for DockGlow / bloom (spreads wider than the narrow MakeRadialSprite).</summary>
         public static Sprite MakeGlowSprite(int size = 256)
         {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
@@ -590,7 +586,7 @@ namespace CardFactory.Core
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
-        /// <summary>Işıktan bağımsız parlama materyali (URP Unlit + emission → bloom yakalar).</summary>
+        /// <summary>Light-independent glow material (URP Unlit + emission → catches bloom).</summary>
         public static Material NewGlowMaterial(Color color)
         {
             var shader = Shader.Find("Universal Render Pipeline/Unlit");
@@ -616,7 +612,7 @@ namespace CardFactory.Core
             return mat;
         }
 
-        /// <summary>Yumuşak radyal hale (merkez parlak → kenar şeffaf) sprite'ı üretir.</summary>
+        /// <summary>Creates a soft radial halo sprite (bright center → transparent edge).</summary>
         public static Sprite MakeRadialSprite(int size = 128)
         {
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
@@ -628,7 +624,7 @@ namespace CardFactory.Core
                 {
                     float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / maxR;
                     float a = Mathf.Clamp01(1f - d);
-                    a *= a;   // kareli düşüş → daha yerel/yumuşak hale (geniş yayılmaz)
+                    a *= a;   // squared falloff → more local/soft halo (doesn't spread wide)
                     px[y * size + x] = new Color(1f, 1f, 1f, a);
                 }
             tex.SetPixels32(px);
@@ -636,9 +632,9 @@ namespace CardFactory.Core
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
-        // ---- Kontakt gölge (yumuşak AO hissi) -------------------------------
+        // ---- Contact shadow (soft AO feel) ----------------------------------
         static Texture2D blobTex;
-        /// <summary>Merkezde opak, kenarda şeffaf yumuşak siyah blob — kontakt gölge dokusu.</summary>
+        /// <summary>Soft black blob, opaque at center → transparent at edge — contact shadow texture.</summary>
         static Texture2D MakeBlobTexture(int size = 128)
         {
             if (blobTex != null) return blobTex;
@@ -650,7 +646,7 @@ namespace CardFactory.Core
                 {
                     float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;
                     float a = Mathf.Clamp01(1f - d);
-                    a *= a;                       // yumuşak, yerel düşüş
+                    a *= a;                       // soft, local falloff
                     px[y * size + x] = new Color(0f, 0f, 0f, a);
                 }
             tex.SetPixels32(px);
@@ -670,21 +666,21 @@ namespace CardFactory.Core
             m.SetTexture("_BaseMap", t);
             m.mainTexture = t;
             m.SetColor("_BaseColor", new Color(0f, 0f, 0f, 0.34f));
-            m.SetFloat("_Surface", 1f);          // transparent
+            m.SetFloat("_Surface", 1f);          // transparent surface
             m.SetFloat("_Blend", 0f);            // alpha blend
             m.SetOverrideTag("RenderType", "Transparent");
             m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             m.SetInt("_ZWrite", 0);
-            m.renderQueue = 2990;                // zeminden sonra, kartlardan önce
+            m.renderQueue = 2990;                // after the ground, before the cards
             m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             blobMat = m;
             return m;
         }
 
         /// <summary>
-        /// Zemine yatık yumuşak kontakt gölge quad'ı oluşturur (üst yüzü kameraya bakar).
-        /// Bin gibi eğik/parented objelerde de world rotasyon flat tutulur.
+        /// Creates a soft contact-shadow quad lying flat on the ground (its top faces the camera).
+        /// Even on leaning/parented objects like the bin, the world rotation is kept flat.
         /// </summary>
         public static Transform SpawnContactShadow(Transform parent, Vector3 worldPos,
                                                    float sizeX, float sizeZ, float y = 0.03f)
@@ -695,7 +691,7 @@ namespace CardFactory.Core
             if (col != null) Object.Destroy(col);
             go.transform.SetParent(parent, false);
             go.transform.position = new Vector3(worldPos.x, y, worldPos.z);
-            go.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);   // zemine yat, normal +Y
+            go.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);   // lie flat on the ground, normal +Y
             go.transform.localScale = new Vector3(sizeX, sizeZ, 1f);
             var r = go.GetComponent<Renderer>();
             r.sharedMaterial = BlobMaterial();
@@ -705,8 +701,8 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// Kalıcı dünya objelerine (kapı, end-cap) kontakt gölge ekler. Idempotent:
-        /// "GroundShadows" kökü varsa atlar → reuse'da da bir kez kurulur.
+        /// Adds contact shadows to the persistent world objects (gate, end-cap). Idempotent:
+        /// skips if a "GroundShadows" root exists → set up once, including in reuse.
         /// </summary>
         static void EnsureGroundShadows(GameObject world)
         {
@@ -721,12 +717,12 @@ namespace CardFactory.Core
             if (endT != null) SpawnContactShadow(root.transform, endT.position, 2.1f, 1.4f);
         }
 
-        // ---- Arka plan "çalışan fabrika" dekoru -----------------------------
+        // ---- Background "working factory" decor ------------------------------
         /// <summary>
-        /// Oyun zemininin ARKASINDAKİ (z>9) boş mavi alana sevimli bir çalışan fabrika
-        /// kurar: arka zemin + akan bantlar + sağa-sola giden kutular + birkaç makine.
-        /// Idempotent ("BackgroundFactory" kökü varsa atlar) → bake + reuse'da bir kez kurulur.
-        /// Animasyon Play'de çalışır (DecorMover/BeltFlow); bake'te de serialize edilir.
+        /// Builds a cute working factory in the empty blue area BEHIND the play ground (z>9):
+        /// back floor + flowing belts + boxes traveling left/right + a few machines.
+        /// Idempotent (skips if a "BackgroundFactory" root exists) → built once in bake + reuse.
+        /// Animation runs on Play (DecorMover/BeltFlow); also serialized when baked.
         /// </summary>
         static void EnsureBackgroundFactory(GameObject world)
         {
@@ -735,23 +731,23 @@ namespace CardFactory.Core
             var root = new GameObject("BackgroundFactory");
             root.transform.SetParent(world.transform, false);
 
-            // Arka zemin (gridi sürdürür) — bantlar bunun üstünde durur.
+            // Back floor (continues the grid) — the belts sit on this.
             var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.name = "BackFloor";
             var fcol = floor.GetComponent<Collider>();
             if (fcol != null) Object.Destroy(fcol);
             floor.transform.SetParent(root.transform, false);
-            floor.transform.localPosition = new Vector3(0f, -0.52f, 15f);   // ana zeminin altına tuttur (dikişsiz)
+            floor.transform.localPosition = new Vector3(0f, -0.52f, 15f);   // tuck under the main ground (seamless)
             floor.transform.localScale = new Vector3(34f, 1f, 12f);
             floor.GetComponent<Renderer>().sharedMaterial = GroundMaterial();
 
-            // Akan bantlar (sağa-sola dönüşümlü), z arttıkça kademeli yükselir → bandın
-            // arkasında net görünür. Üstlerinde sevimli renkli kutular gider.
+            // Flowing belts (alternating left/right), rising with z → clearly visible behind the
+            // belt. Cute colored boxes ride on top of them.
             BuildDecorBelt(root.transform, 10.5f, 0.8f, +1.7f);
             BuildDecorBelt(root.transform, 13.5f, 1.2f, -1.5f);
             BuildDecorBelt(root.transform, 16.5f, 1.6f, +1.3f);
 
-            // Arka silolar / makineler (skyline flavor) — statik.
+            // Back silos / machines (skyline flavor) — static.
             var machMat = NewLitMaterial(new Color(0.62f, 0.66f, 0.72f));
             var siloMat = NewLitMaterial(new Color(0.78f, 0.81f, 0.86f));
             foreach (var sx in new[] { -12.5f, -9.5f, 10f, 13f })
@@ -775,7 +771,7 @@ namespace CardFactory.Core
             }
         }
 
-        /// <summary>Tek bir dekor bandı: kaide + ray + akan chevron + üstünde giden kutular.</summary>
+        /// <summary>A single decor belt: slab + rails + flowing chevrons + boxes riding on top.</summary>
         static void BuildDecorBelt(Transform parent, float z, float y, float speed)
         {
             const float halfLen = 13f, surfaceY = 0.16f;
@@ -783,7 +779,7 @@ namespace CardFactory.Core
             beltRoot.transform.SetParent(parent, false);
             beltRoot.transform.localPosition = new Vector3(0f, y, z);
 
-            // Kaide
+            // Slab
             var slab = GameObject.CreatePrimitive(PrimitiveType.Cube);
             slab.name = "DecorBeltSlab";
             DestroyColliderGO(slab);
@@ -792,7 +788,7 @@ namespace CardFactory.Core
             slab.transform.localScale = new Vector3(halfLen * 2f, 0.22f, 1.15f);
             slab.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.38f, 0.43f, 0.52f));
 
-            // Yan raylar
+            // Side rails
             var railMat = NewLitMaterial(new Color(0.6f, 0.65f, 0.74f));
             for (int s = -1; s <= 1; s += 2)
             {
@@ -805,7 +801,7 @@ namespace CardFactory.Core
                 rail.GetComponent<Renderer>().sharedMaterial = railMat;
             }
 
-            // Destek ayakları (zemine iner) → bant havada durmasın.
+            // Support legs (reach the ground) → so the belt doesn't float.
             var legMat = NewLitMaterial(new Color(0.5f, 0.54f, 0.6f));
             foreach (var lx in new[] { -halfLen * 0.8f, halfLen * 0.8f })
             {
@@ -818,7 +814,7 @@ namespace CardFactory.Core
                 leg.GetComponent<Renderer>().sharedMaterial = legMat;
             }
 
-            // Akan chevron'lar (bandın yönünde)
+            // Flowing chevrons (in the belt's direction)
             var chevMat = NewLitMaterial(new Color(0.7f, 0.75f, 0.84f));
             var flowGo = new GameObject("DecorFlow");
             flowGo.transform.SetParent(beltRoot.transform, false);
@@ -827,13 +823,13 @@ namespace CardFactory.Core
             var chevrons = new Transform[chevCount];
             for (int i = 0; i < chevCount; i++)
                 chevrons[i] = BuildChevron(flowGo.transform, chevMat);
-            // Yön: speed>0 → -x'ten +x'e; tersi tam tersi.
+            // Direction: speed>0 → -x to +x; otherwise the reverse.
             var wp = speed >= 0f
                 ? new[] { new Vector3(-halfLen, 0f, 0f), new Vector3(halfLen, 0f, 0f) }
                 : new[] { new Vector3(halfLen, 0f, 0f), new Vector3(-halfLen, 0f, 0f) };
             flow.Setup(wp, chevrons, Mathf.Abs(speed) * 1.3f, surfaceY);
 
-            // Üstünde giden kutular (sevimli renkli)
+            // Boxes riding on top (cute colored)
             var boxesRoot = new GameObject("DecorBoxes");
             boxesRoot.transform.SetParent(beltRoot.transform, false);
             const int n = 6;
@@ -868,28 +864,28 @@ namespace CardFactory.Core
 
         static void BuildEndCap(Transform parent, Vector3 endPt)
         {
-            // AÇIK çıkış ucu: kapalı kutu/üst trim YOK → kartlar üstten serbest çıkıp
-            // dock'a uçar (içinden yarmaz). Alçak taban + uç makarası + 2 yan ray.
+            // OPEN exit end: NO closed box/top trim → cards exit freely over the top and fly
+            // to the dock (they don't cut through it). Low base + end roller + 2 side rails.
             var baseMat = NewLitMaterial(new Color(0.55f, 0.57f, 0.60f));
 
-            var baseGo = ProcMesh.RoundedCube("BeltEndCap");   // (ad korunur → kontakt gölge bulur)
+            var baseGo = ProcMesh.RoundedCube("BeltEndCap");   // (name kept → contact shadow finds it)
             DestroyColliderGO(baseGo);
             baseGo.transform.SetParent(parent, false);
             baseGo.transform.position = new Vector3(endPt.x, 0.16f, endPt.z);
             baseGo.transform.localScale = new Vector3(1.75f, 0.34f, 1.0f);
             baseGo.GetComponent<Renderer>().sharedMaterial = baseMat;
 
-            // Uç makarası (silindir, eksen X) — açık konveyör ucu hissi.
+            // End roller (cylinder, X axis) — open conveyor-end feel.
             var roller = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             roller.name = "BeltEndRoller";
             DestroyColliderGO(roller);
             roller.transform.SetParent(parent, false);
             roller.transform.position = new Vector3(endPt.x, 0.4f, endPt.z + 0.42f);
-            roller.transform.rotation = Quaternion.Euler(0f, 0f, 90f);   // eksen X (bant enine)
+            roller.transform.rotation = Quaternion.Euler(0f, 0f, 90f);   // X axis (across the belt)
             roller.transform.localScale = new Vector3(0.46f, 0.95f, 0.46f);
             roller.GetComponent<Renderer>().sharedMaterial = NewLitMaterial(new Color(0.64f, 0.68f, 0.74f));
 
-            // 2 alçak yan ray (üst açık).
+            // 2 low side rails (open top).
             var railMat = NewLitMaterial(new Color(0.66f, 0.70f, 0.78f));
             for (int s = -1; s <= 1; s += 2)
             {
@@ -902,7 +898,7 @@ namespace CardFactory.Core
             }
         }
 
-        // Desteleri (kartlar) stack anchor'larının ALTINA kurar; anchor konumu kullanılır.
+        // Builds the stacks (cards) UNDER the stack anchors; the anchor position is used.
         static List<CardStack> BuildStacks(LevelData level, Conveyor conveyor)
         {
             var result = new List<CardStack>();
@@ -916,7 +912,7 @@ namespace CardFactory.Core
                 go.transform.SetParent(anchor, false);
                 var stack = go.AddComponent<CardStack>();
                 stack.Init(level.stacks[i], anchor.position, conveyor);
-                // Destenin zemine kontakt gölgesi (stack ile birlikte temizlenir).
+                // The stack's ground contact shadow (cleared along with the stack).
                 SpawnContactShadow(go.transform, anchor.position, 1.3f, 1.6f);
                 result.Add(stack);
             }
@@ -955,7 +951,7 @@ namespace CardFactory.Core
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 200f;
 
-            // Daha yukarıdan, daha dik (kuş bakışı) açı.
+            // Higher up, steeper (top-down) angle.
             camGo.transform.position = new Vector3(0f, 18f, -9f);
             camGo.transform.rotation = Quaternion.Euler(CameraPitch, 0f, 0f);
 
@@ -990,12 +986,12 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// Görsel cila (idempotent; hem bake hem reuse'da çalışır): ışık ayarı,
-        /// grid zemin, hafif parlaklık, post-processing volume, kamera post-fx.
+        /// Visual polish (idempotent; runs in both bake and reuse): light tuning, grid ground,
+        /// slight gloss, post-processing volume, camera post-fx.
         /// </summary>
         static void ApplyPolish(GameObject world)
         {
-            // Işık
+            // Light
             var light = world.GetComponentInChildren<Light>(true);
             if (light != null)
             {
@@ -1008,16 +1004,16 @@ namespace CardFactory.Core
             RenderSettings.ambientMode = AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.64f, 0.68f, 0.74f);
 
-            // Çevre süsleri (köşe sandıklar + uyarı bandı) — yoksa kurulur (reuse'da da).
+            // Environment decor (corner crates + warning stripe) — built if missing (in reuse too).
             EnsureDecor(world);
 
-            // Kalıcı objelerin zemin kontakt gölgeleri (idempotent).
+            // Ground contact shadows for the persistent objects (idempotent).
             EnsureGroundShadows(world);
 
-            // Arka plandaki boş alana "çalışan fabrika" dekoru (idempotent).
+            // "Working factory" decor in the empty background area (idempotent).
             EnsureBackgroundFactory(world);
 
-            // Grid zemin
+            // Grid ground
             var ground = world.transform.Find("Ground");
             if (ground != null)
             {
@@ -1025,7 +1021,7 @@ namespace CardFactory.Core
                 if (r != null) r.sharedMaterial = GroundMaterial();
             }
 
-            // Parlaklık — sadece düz renkli oyun materyalleri (dokulu zemin/sandık/bant matt kalsın)
+            // Gloss — only flat-colored game materials (keep textured ground/crate/belt matte)
             foreach (var rend in world.GetComponentsInChildren<Renderer>(true))
             {
                 var m = rend.sharedMaterial;
@@ -1033,13 +1029,13 @@ namespace CardFactory.Core
                 if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.45f);
             }
 
-            // Post-processing volume — IDEMPOTENT: yoksa kur, varsa DOKUNMA → kullanıcının
-            // Inspector'da yaptığı renk tonu ayarları ezilmez. (Koddaki değerleri uygulamak için
-            // 'Rebake Belt + Color' aracı PostFX'i baştan kurar.)
+            // Post-processing volume — IDEMPOTENT: build if missing, DON'T touch if present → the
+            // user's Inspector color-tint tweaks aren't overwritten. (To apply the code values, the
+            // 'Rebake Belt + Color' tool rebuilds the PostFX from scratch.)
             if (world.transform.Find("PostFX") == null)
                 BuildPostFX(world.transform);
 
-            // Kamera post-processing aç
+            // Enable camera post-processing
             var cam = world.GetComponentInChildren<Camera>(true);
             if (cam != null)
             {
@@ -1060,11 +1056,11 @@ namespace CardFactory.Core
             var profile = ScriptableObject.CreateInstance<VolumeProfile>();
             vol.sharedProfile = profile;
 
-            // Hafif/yumuşak ton — göz yormasın (yüksek satür/kontrast/bloom kaldırıldı).
+            // Light/soft tone — easy on the eyes (high saturation/contrast/bloom removed).
             var bloom = profile.Add<Bloom>();
             bloom.active = true;
             bloom.intensity.Override(0.28f);
-            bloom.threshold.Override(0.95f);   // sadece çok parlak yüzeyler hafif parlar
+            bloom.threshold.Override(0.95f);   // only very bright surfaces glow slightly
             bloom.scatter.Override(0.6f);
 
             var vig = profile.Add<Vignette>();
@@ -1074,14 +1070,14 @@ namespace CardFactory.Core
 
             var ca = profile.Add<ColorAdjustments>();
             ca.active = true;
-            ca.saturation.Override(10f);                                  // hafif canlılık (aşırı değil)
+            ca.saturation.Override(10f);                                  // slight vibrancy (not excessive)
             ca.contrast.Override(4f);
             ca.postExposure.Override(0.03f);
-            ca.colorFilter.Override(Color.white);                         // nötr beyaz
+            ca.colorFilter.Override(Color.white);                         // neutral white
 
             var wb = profile.Add<WhiteBalance>();
             wb.active = true;
-            wb.temperature.Override(0f);                                  // nötr; sahneden ayarlanabilir
+            wb.temperature.Override(0f);                                  // neutral; tunable from the scene
 
             var tone = profile.Add<Tonemapping>();
             tone.active = true;
@@ -1089,9 +1085,9 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// SEÇİCİ BAKE: yalnızca Belt görselini + PostFX (renk tonu) volume'unu yeniden kurar.
-        /// Dünyadaki DİĞER her şeye (bins/anchor/kapı/dock/sandık/arka plan/zemin/kamera/lid) DOKUNMAZ
-        /// → manuel sahne ayarları korunur. Editör 'Rebake Belt + Color' aracı kullanır.
+        /// SELECTIVE BAKE: rebuilds only the Belt visual + the PostFX (color tint) volume.
+        /// Touches NOTHING ELSE in the world (bins/anchors/gate/dock/crates/background/ground/camera/lid)
+        /// → manual scene tweaks are preserved. Used by the Editor 'Rebake Belt + Color' tool.
         /// </summary>
         public static void RebakeBeltAndPostFX(GameObject world)
         {
@@ -1108,11 +1104,11 @@ namespace CardFactory.Core
 
         static Material GroundMaterial()
         {
-            var mat = NewLitMaterial(new Color(0.88f, 0.93f, 0.99f));   // hafif daha aydınlık zemin
+            var mat = NewLitMaterial(new Color(0.88f, 0.93f, 0.99f));   // slightly brighter ground
             var tex = MakeGridTexture();
             mat.SetTexture("_BaseMap", tex);
             mat.mainTexture = tex;
-            mat.SetTextureScale("_BaseMap", new Vector2(7f, 7f));   // daha büyük, ferah hücreler
+            mat.SetTextureScale("_BaseMap", new Vector2(7f, 7f));   // larger, airier cells
             mat.mainTextureScale = new Vector2(7f, 7f);
             mat.SetFloat("_Smoothness", 0.18f);
             return mat;
@@ -1124,7 +1120,7 @@ namespace CardFactory.Core
             const int lineW = 2;
             var tex = new Texture2D(s, s, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Repeat };
             var baseC = (Color32)new Color(0.88f, 0.93f, 0.99f);
-            var lineC = (Color32)new Color(0.70f, 0.79f, 0.90f);   // biraz daha belirgin grid
+            var lineC = (Color32)new Color(0.70f, 0.79f, 0.90f);   // slightly more visible grid
             var px = new Color32[s * s];
             for (int y = 0; y < s; y++)
                 for (int x = 0; x < s; x++)
@@ -1135,7 +1131,7 @@ namespace CardFactory.Core
         }
 
         static Texture2D stripeTex;
-        /// <summary>Sarı-siyah diyagonal uyarı bandı dokusu (prosedürel).</summary>
+        /// <summary>Yellow-black diagonal warning-stripe texture (procedural).</summary>
         static Texture2D MakeStripeTexture()
         {
             if (stripeTex != null) return stripeTex;
@@ -1154,7 +1150,7 @@ namespace CardFactory.Core
         }
 
         static Texture2D crateTex;
-        /// <summary>Ahşap sandık dokusu: tahta dikişleri + çerçeve + çapraz destek (prosedürel).</summary>
+        /// <summary>Wooden crate texture: plank seams + frame + diagonal brace (procedural).</summary>
         static Texture2D MakeCrateTexture()
         {
             if (crateTex != null) return crateTex;
@@ -1168,10 +1164,10 @@ namespace CardFactory.Core
                 for (int x = 0; x < s; x++)
                 {
                     Color32 c = wood;
-                    if (x % 16 < 2) c = woodDark;                                   // tahta dikişleri
-                    if (Mathf.Abs(x - y) < 3 || Mathf.Abs(x - (s - 1 - y)) < 3) c = woodDark; // çapraz destek
+                    if (x % 16 < 2) c = woodDark;                                   // plank seams
+                    if (Mathf.Abs(x - y) < 3 || Mathf.Abs(x - (s - 1 - y)) < 3) c = woodDark; // diagonal brace
                     const int b = 5;
-                    if (x < b || x >= s - b || y < b || y >= s - b) c = frame;      // dış çerçeve
+                    if (x < b || x >= s - b || y < b || y >= s - b) c = frame;      // outer frame
                     px[y * s + x] = c;
                 }
             tex.SetPixels32(px);
@@ -1181,8 +1177,8 @@ namespace CardFactory.Core
         }
 
         /// <summary>
-        /// Çevre süsleri (idempotent): 4 köşe ahşap sandık + üstte sarı-siyah uyarı
-        /// bandı. "Decor" kökü zaten varsa hiçbir şey yapmaz → reuse'da da bir kez kurulur.
+        /// Environment decor (idempotent): 4 corner wooden crates + a yellow-black warning stripe
+        /// on top. Does nothing if a "Decor" root already exists → built once, including in reuse.
         /// </summary>
         static void EnsureDecor(GameObject world)
         {
@@ -1191,7 +1187,7 @@ namespace CardFactory.Core
             var decor = new GameObject("Decor");
             decor.transform.SetParent(world.transform, false);
 
-            // Köşe ahşap sandıklar
+            // Corner wooden crates
             var crateMat = NewLitMaterial(new Color(0.64f, 0.45f, 0.25f));
             var ct = MakeCrateTexture();
             crateMat.SetTexture("_BaseMap", ct);
@@ -1267,14 +1263,13 @@ namespace CardFactory.Core
             var shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null)
             {
-                Debug.LogError("[GameBootstrap] 'Universal Render Pipeline/Lit' shader'ı " +
-                               "bulunamadı! Project Settings > Graphics > Always Included " +
-                               "Shaders listesine ekle.");
+                Debug.LogError("[GameBootstrap] 'Universal Render Pipeline/Lit' shader not found! " +
+                               "Add it to Project Settings > Graphics > Always Included Shaders.");
                 shader = Shader.Find("Standard");
             }
             var mat = new Material(shader) { color = color };
             mat.SetColor("_BaseColor", color);
-            mat.SetFloat("_Smoothness", 0.5f);   // parlak "cartoon" cila
+            mat.SetFloat("_Smoothness", 0.5f);   // glossy "cartoon" finish
             mat.SetFloat("_Metallic", 0f);
             return mat;
         }

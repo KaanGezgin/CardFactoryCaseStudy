@@ -7,9 +7,9 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Taşma tamponu: sabit kapasiteli görünür slot dizisi (yatay tepsi).
-    /// Eşleşmeden yolun sonuna ulaşan kartlar buraya düşüp slota oturur.
-    /// Dolunca GameManager.OnDockFull → FAILED. Genişletme yok.
+    /// Overflow buffer: a fixed-capacity visible slot array (horizontal tray).
+    /// Cards that reach the end of the path without matching fall here and settle into a slot.
+    /// When full, GameManager.OnDockFull → FAILED. No expansion.
     /// </summary>
     public class Dock : MonoBehaviour
     {
@@ -24,8 +24,8 @@ namespace CardFactory.Gameplay
         Vector3[] slots;
         float centerZ;
 
-        // Dock dizilimi (sol→sağ). Renge göre gruplanır: gelen kart aynı renk grubunun
-        // sağına girer, sağdaki kartlar bir slot kayar.
+        // Dock layout (left→right). Grouped by color: an incoming card inserts to the right of
+        // its color group, and the cards to its right shift one slot over.
         readonly List<Card> placed = new();
 
         TextMesh offerLabel;
@@ -50,11 +50,11 @@ namespace CardFactory.Gameplay
         static readonly Color OfferGreen = new Color(0.12f, 0.68f, 0.30f);
         static readonly Color PedestalBlue = new Color(0.11f, 0.17f, 0.32f);
 
-        const float Spacing = 0.28f;   // daha sıkışık; slot konumları Inspector'dan ayarlanabilir
+        const float Spacing = 0.28f;   // tighter; slot positions can be tuned in the Inspector
         const float SlotPocketY = 0.17f;
         const float CardY = 0.30f;
 
-        // Dock'a düşen kartın ölçeği (kullanıcı ayarı): X=ince yüz, Y=uzun kenar, Z=derinlik.
+        // Scale of a card dropped into the dock (user tuning): X=thin face, Y=long edge, Z=depth.
         static readonly Vector3 DockCardScale = new Vector3(0.2f, 1.72f, 1f);
         static readonly Quaternion DockCardRot = Quaternion.Euler(-12f, 0f, 0f);
         static readonly Vector3 PocketScale = new Vector3(0.24f, 0.38f, 0.40f);
@@ -181,8 +181,8 @@ namespace CardFactory.Gameplay
         }
 
         /// <summary>
-        /// Yuvarlak halo (sprite). Konum/ölçek Inspector'dan ayarlanır; runtime'da
-        /// SADECE alpha hafifçe nabız atar — transform ezilmez.
+        /// Round halo (sprite). Position/scale are set in the Inspector; at runtime ONLY the
+        /// alpha pulses gently — the transform is never overwritten.
         /// </summary>
         void EnsureGlowHalo(Transform offerParent, bool createIfMissing)
         {
@@ -219,7 +219,7 @@ namespace CardFactory.Gameplay
             SetGlowVisible(false);
         }
 
-        /// <summary>Eski kare quad katmanlarını kaldırır; kök transform korunur.</summary>
+        /// <summary>Removes the old square quad layers; the root transform is kept.</summary>
         static void RemoveLegacyQuadLayers(Transform glowT)
         {
             for (int i = glowT.childCount - 1; i >= 0; i--)
@@ -280,7 +280,7 @@ namespace CardFactory.Gameplay
             }
         }
 
-        /// <summary>Sadece alpha nabzı — konum/scale DOKUNULMAZ (Inspector ayarı korunur).</summary>
+        /// <summary>Alpha pulse only — position/scale are NOT touched (Inspector setting preserved).</summary>
         void PulseGlow()
         {
             if (!glowActive) return;
@@ -326,7 +326,7 @@ namespace CardFactory.Gameplay
                 offerAmount = FindChildTextMesh(offer, "OfferAmount");
             }
 
-            // Eski DockGlowFloor artık kullanılmıyor.
+            // The old DockGlowFloor is no longer used.
             var oldFloor = transform.Find("DockGlowFloor");
             if (oldFloor != null) oldFloor.gameObject.SetActive(false);
 
@@ -340,12 +340,12 @@ namespace CardFactory.Gameplay
 
             if (offerLabel != null) offerLabel.text = "New Dock";
             if (offerAmount != null) offerAmount.text = "1000";
-            // (Fail'de teklif butonunun "atma/zıplama" efekti kullanıcı isteğiyle kaldırıldı.)
+            // (The offer button's "punch/bounce" effect on fail was removed at the user's request.)
 
             ResolveGlowRef();
             CaptureGlowBaseline();
             if (glowBaseAlpha < 0.75f) glowBaseAlpha = GlowAlphaOnFail;
-            // 3B sprite yerine HudController.FailOfferGlow (UI, karartmanın üstünde).
+            // Instead of a 3D sprite, HudController.FailOfferGlow (UI, above the dim overlay).
             SetGlowVisible(false);
         }
 
@@ -422,12 +422,12 @@ namespace CardFactory.Gameplay
                 return;
             }
 
-            // Ekleme yeri: aynı renkteki son kartın HEMEN SAĞINA; o renk yoksa en sona.
+            // Insertion point: RIGHT AFTER the last card of the same color; if absent, at the end.
             int insertion = placed.Count;
             for (int i = placed.Count - 1; i >= 0; i--)
                 if (placed[i] != null && placed[i].Color == card.Color) { insertion = i + 1; break; }
 
-            // insertion'dan sağdaki kartlar bir slot sağa kayar (hafif yükselip, kademeli).
+            // Cards to the right of insertion shift one slot over (slight lift, staggered).
             for (int i = placed.Count - 1; i >= insertion; i--)
             {
                 var c = placed[i];
@@ -440,14 +440,14 @@ namespace CardFactory.Gameplay
             Count = placed.Count;
             card.State = CardState.Dock;
 
-            // Sağ uçta yeni dolan slotun pocket'ını gizle (dolu bölge daima 0..Count-1).
+            // Hide the pocket of the newly filled slot at the right end (filled region is always 0..Count-1).
             int lastIdx = Count - 1;
             if (slotPockets != null && lastIdx < slotPockets.Length && slotPockets[lastIdx] != null)
                 slotPockets[lastIdx].enabled = false;
 
             card.transform.localScale = DockCardScale;
             card.transform.rotation = DockCardRot;
-            // Bant sonundan, grubunun yanındaki slota UÇARAK konar (yay).
+            // From the belt end, it FLIES (arcs) to land in the slot next to its group.
             Vector3 target = slots[insertion];
             card.MoveArc(target, 1.3f, 0.42f, () =>
             {
@@ -463,7 +463,7 @@ namespace CardFactory.Gameplay
                 gm.OnDockFull();
         }
 
-        /// <summary>Var olan dock kartını, hafif yükselip yeni slotuna kaydırır (kademeli gecikme).</summary>
+        /// <summary>Shifts an existing dock card to its new slot with a slight lift (staggered delay).</summary>
         IEnumerator ShiftCard(Card card, Vector3 target, float delay)
         {
             if (delay > 0f) yield return new WaitForSeconds(delay);

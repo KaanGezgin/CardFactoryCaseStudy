@@ -3,14 +3,14 @@ using UnityEngine;
 namespace CardFactory.Core
 {
     /// <summary>
-    /// Kalıcı dünya kökünde (CardFactoryWorld) durur. Açıkken Play'de dünya silinip
-    /// koddan yeniden kurulur; KAPALIYKEN (varsayılan) mevcut sahne objeleri aynen
-    /// korunur ve runtime yalnızca kart + ortadaki kutuları anchor'ların altına kurar.
+    /// Lives on the persistent world root (CardFactoryWorld). When enabled, the world is
+    /// destroyed and rebuilt from code on Play; when disabled (default) the existing scene
+    /// objects are kept as-is and runtime only builds the cards + center bins under the anchors.
     /// </summary>
     public class WorldPersistence : MonoBehaviour
     {
-        [Tooltip("Açık: Play'de dünyayı koddan baştan kur (kod değişince işaretle). " +
-                 "Kapalı: sahnedeki objeleri koru (Inspector ayarların korunur).")]
+        [Tooltip("On: rebuild the world from code on Play (tick this when code changes). " +
+                 "Off: keep the scene objects (your Inspector tweaks are preserved).")]
         public bool rebuildOnPlay = false;
     }
 }

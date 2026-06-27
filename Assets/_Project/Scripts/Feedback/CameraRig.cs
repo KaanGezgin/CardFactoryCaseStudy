@@ -4,7 +4,7 @@ using UnityEngine;
 namespace CardFactory.Feedback
 {
     /// <summary>
-    /// Kameraya küçük bir "punch" (sarsıntı) verir. Juice efektleri buradan çağırır.
+    /// Gives the camera a small "punch" (shake). Juice effects call into this.
     /// </summary>
     public class CameraRig : MonoBehaviour
     {

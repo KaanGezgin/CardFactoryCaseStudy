@@ -5,8 +5,8 @@ using UnityEngine;
 namespace CardFactory.Feedback
 {
     /// <summary>
-    /// Bağımsız küçük tween/juice yardımcısı (DOTween YOK). Coroutine'leri kalıcı
-    /// bir runner üzerinde çalıştırır; hedef yok olursa güvenle durur.
+    /// Small standalone tween/juice helper (NO DOTween). Runs coroutines on a persistent
+    /// runner; stops safely if the target is destroyed.
     /// </summary>
     public static class Juice
     {
@@ -26,28 +26,28 @@ namespace CardFactory.Feedback
             }
         }
 
-        /// <summary>0'dan baz ölçeğe overshoot ile büyür (spawn pop).</summary>
+        /// <summary>Grows from 0 to the base scale with overshoot (spawn pop).</summary>
         public static void PopIn(Transform t, Vector3 baseScale, float dur = 0.18f, float overshoot = 1.18f)
         {
             if (t == null) return;
             Runner.StartCoroutine(PopInRoutine(t, baseScale, dur, overshoot));
         }
 
-        /// <summary>Baz ölçekten kısa bir punch (vurgu) yapıp geri döner.</summary>
+        /// <summary>Does a short punch (emphasis) from the base scale and returns.</summary>
         public static void PunchScale(Transform t, Vector3 baseScale, float amount = 0.18f, float dur = 0.16f)
         {
             if (t == null) return;
             Runner.StartCoroutine(PunchRoutine(t, baseScale, amount, dur));
         }
 
-        /// <summary>Ölçeği 0'a küçültüp yok eder/onDone çağırır.</summary>
+        /// <summary>Shrinks the scale to 0, then destroys / calls onDone.</summary>
         public static void ShrinkOut(Transform t, float dur = 0.2f, Action onDone = null)
         {
             if (t == null) { onDone?.Invoke(); return; }
             Runner.StartCoroutine(ShrinkRoutine(t, dur, onDone));
         }
 
-        /// <summary>Verilen konumda kısa ömürlü renkli partikül patlaması.</summary>
+        /// <summary>Short-lived colored particle burst at the given position.</summary>
         public static void Burst(Vector3 pos, Color color, int count = 12)
         {
             Runner.StartCoroutine(BurstRoutine(pos, color, count));
@@ -68,7 +68,7 @@ namespace CardFactory.Feedback
                 if (t == null) yield break;
                 time += Time.deltaTime;
                 float k = Mathf.Clamp01(time / dur);
-                // 0 -> overshoot -> 1
+                // 0 -> overshoot -> 1 scale curve
                 float s = k < 0.7f
                     ? Mathf.Lerp(0f, overshoot, k / 0.7f)
                     : Mathf.Lerp(overshoot, 1f, (k - 0.7f) / 0.3f);

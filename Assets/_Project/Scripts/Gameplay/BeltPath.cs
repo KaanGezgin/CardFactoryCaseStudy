@@ -4,8 +4,8 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Konveyör yolu: dünya-uzayı waypoint dizisi. Kartlar yay-uzunluğu (arc
-    /// length) ile ilerler. U/üçgen şekli için yeterince sık vertex verilir.
+    /// Conveyor path: a world-space waypoint array. Cards advance by arc length.
+    /// Enough vertices are provided for the U/triangle shape.
     /// </summary>
     public class BeltPath
     {
@@ -35,18 +35,18 @@ namespace CardFactory.Gameplay
             return Vector3.Lerp(pts[i - 1], pts[i], t);
         }
 
-        /// <summary>İlerleme (artan d) yönündeki birim teğet → kart bu yöne döner (viraj takibi).</summary>
+        /// <summary>Unit tangent in the direction of travel (increasing d) → cards rotate to it (turn-following).</summary>
         public Vector3 TangentAt(float d)
         {
             if (pts.Count < 2) return Vector3.forward;
             d = Mathf.Clamp(d, 0f, Length);
             int i = 1;
-            while (i < pts.Count - 1 && cum[i] < d) i++;   // d'nin düştüğü segment [i-1, i]
+            while (i < pts.Count - 1 && cum[i] < d) i++;   // segment [i-1, i] that d falls into
             Vector3 dir = pts[i] - pts[i - 1];
             return dir.sqrMagnitude > 1e-6f ? dir.normalized : Vector3.forward;
         }
 
-        /// <summary>Verilen dünya noktasına en yakın vertex'in yay-uzunluğu.</summary>
+        /// <summary>Arc length of the vertex nearest to the given world point.</summary>
         public float NearestDist(Vector3 world)
         {
             float best = float.MaxValue;

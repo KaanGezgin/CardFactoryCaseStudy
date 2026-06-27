@@ -9,18 +9,18 @@ using UnityEngine;
 namespace CardFactory.Core
 {
     /// <summary>
-    /// Otomatik REKLAM yönetmeni (Part 3). Benchmark'a (Match Factory! · Ad Type 3) göre TEK
-    /// kreatifte: fail-bait (savruk oyun → DOCK DOLAR → gerçek FAILED) → success (doğru oyun →
-    /// TÜM KARTLAR biter → gerçek COMPLETE) → CTA ("Play now"). Renk psikolojisi: kırmızı/yeşil.
+    /// Automatic AD director (Part 3). Per the benchmark (Match Factory! · Ad Type 3), a SINGLE
+    /// creative: fail-bait (sloppy play → DOCK FILLS → real FAILED) → success (correct play →
+    /// ALL CARDS clear → real COMPLETE) → CTA ("Play now"). Color psychology: red/green.
     ///
-    /// Sahneyi KENDİSİ oynar: el imlecini hedef desteye sürer, `CardStack.OnTapped()` çağırır.
-    /// Beat panelleri için `HudController`'ın yuvarlatılmış UI'sını kullanır. Kalıcı; 'A' tuşuyla
-    /// (veya `GameConfig.adMode`) başlar. Demo board deterministik (`DefaultLevels.GetDemo`).
+    /// It PLAYS the scene itself: drives the hand cursor to the target stack and calls
+    /// `CardStack.OnTapped()`. Uses `HudController`'s rounded UI for the beat panels. Persistent;
+    /// starts with the 'A' key (or `GameConfig.adMode`). The demo board is deterministic (`DefaultLevels.GetDemo`).
     /// </summary>
     public class AdDirector : MonoBehaviour
     {
         public KeyCode startKey = KeyCode.A;
-        public float   startDelay = 3f;   // A'ya basınca reklam bu kadar sn SONRA başlar (kaydı hazırlamak için pay)
+        public float   startDelay = 3f;   // after pressing A the ad starts this many sec LATER (buffer to prep recording)
 
         bool running;
 
@@ -48,17 +48,17 @@ namespace CardFactory.Core
 
         IEnumerator RunAd()
         {
-            // A'ya basınca reklam HEMEN başlamaz → Recorder'ı başlatıp pencereye dönmek için pay.
+            // The ad does NOT start immediately on A → buffer to start the Recorder and switch back.
             if (startDelay > 0f) yield return new WaitForSeconds(startDelay);
 
             GameBootstrap.AdMode = true;
-            GameBootstrap.AdWinnableBoard = false;   // 1. aşama: kazanılamaz fail board
+            GameBootstrap.AdWinnableBoard = false;   // phase 1: unwinnable fail board
             GameBootstrap.RequestRebuild(0);
             yield return Sequence();
         }
 
         // ---------------------------------------------------------------------
-        //  SEKANS
+        //  SEQUENCE
         // ---------------------------------------------------------------------
 
         IEnumerator Sequence()
@@ -70,52 +70,52 @@ namespace CardFactory.Core
             // Beat 0 — Hook.
             yield return new WaitForSeconds(1.3f);
 
-            // Beat 1 — Fail-bait: kazanılamaz board → dock dolar → gerçek LEVEL FAILED.
+            // Beat 1 — Fail-bait: unwinnable board → dock fills → real LEVEL FAILED.
             yield return PlayCareless(35);
             yield return new WaitForSeconds(0.3f);
-            // Teklif widget'ı: "+4 slots / 400" → "New Dock / 1000".
+            // Offer widget: "+4 slots / 400" → "New Dock / 1000".
             Object.FindFirstObjectByType<Dock>()?.ShowFailOffer();
-            // Ses GameManager.OnDockFull'da çalıyor (tek sefer). Glow kapalı (beğenilmedi); X açık.
+            // Sound plays once in GameManager.OnDockFull. Glow off (disliked); X shown.
             Hud()?.ShowAdMessage("LEVEL FAILED", "So close!", FailFront, FailTint,
                 showClose: true);
             yield return new WaitForSeconds(1.9f);
             Hud()?.HideAdMessage();
 
-            // Reset — kazanılabilir (success) board.
+            // Reset — winnable (success) board.
             GameBootstrap.AdWinnableBoard = true;
             GameBootstrap.RequestRebuild(0);
             yield return WaitForBoard();
             SetupHand();
             yield return new WaitForSeconds(0.6f);
 
-            // Beat 2 — Success: doğru oyna → tüm kartlar biter (gerçek COMPLETE).
+            // Beat 2 — Success: play correctly → all cards clear (real COMPLETE).
             yield return PlaySmart(40);
             yield return new WaitForSeconds(0.4f);
-            // Ses GameManager.Win'de çalıyor (tek sefer).
+            // Sound plays once in GameManager.Win.
             Hud()?.ShowAdMessage("LEVEL COMPLETE", "Your turn — tap to play!", WinFront, WinTint);
             yield return new WaitForSeconds(2.0f);
 
-            // Beat 3 — CTA (ekranda kalır).
+            // Beat 3 — CTA (stays on screen).
             Hud()?.ShowAdMessage("Play now!", "It's free!", WinFront, WinTint);
 
             running = false;
         }
 
-        /// <summary>Fail oyun: aktif-OLMAYAN tepe grubunu gönder → dock'a gider → dolunca fail.</summary>
+        /// <summary>Fail play: send the NON-active top group → goes to the dock → fills → fail.</summary>
         IEnumerator PlayCareless(int maxTaps)
         {
             bool shownBlocked = false;
             for (int i = 0; i < maxTaps; i++)
             {
                 var gm = GameManager.Instance;
-                if (gm != null && gm.State == GameState.Lost) yield break;   // dock doldu
+                if (gm != null && gm.State == GameState.Lost) yield break;   // dock filled
 
-                // Bant DOLUYKEN bilerek 1-2 kez dene → "dolu, koyamıyor" görünsün (kırmızı flaş).
+                // While the belt is FULL, deliberately try 1-2 times → shows "full, can't place" (red flash).
                 if (!shownBlocked && BeltCount() >= 19)
                 {
                     var fs = FindWrongTopStack() ?? AnyNonEmptyStack();
                     for (int k = 0; k < 2 && fs != null && !fs.IsEmpty; k++)
-                        yield return TapStack(fs, 0.8f);   // belt dolu → TrySend engeller → uyarı flaşı
+                        yield return TapStack(fs, 0.8f);   // belt full → TrySend blocks → warning flash
                     shownBlocked = true;
                 }
 
@@ -123,7 +123,7 @@ namespace CardFactory.Core
                 if (s == null) break;
                 yield return TapStack(s, 0.32f);
             }
-            yield return WaitForLost(8f);   // gönderilen kartlar dock'a varıp doldursun
+            yield return WaitForLost(8f);   // let the sent cards reach the dock and fill it
         }
 
         static int BeltCount()
@@ -143,7 +143,7 @@ namespace CardFactory.Core
             }
         }
 
-        /// <summary>Akıllı oyun: tepesi AKTİF renk olan desteyi gönder → kutuya iner → kazanır.</summary>
+        /// <summary>Smart play: send a stack whose top is an ACTIVE color → lands in a bin → wins.</summary>
         IEnumerator PlaySmart(int maxTaps)
         {
             for (int i = 0; i < maxTaps; i++)
@@ -153,17 +153,17 @@ namespace CardFactory.Core
                 if (AllStacksEmpty()) break;
 
                 var s = FindActiveTopStack();
-                if (s == null) { yield return new WaitForSeconds(0.4f); continue; }   // akış işlensin
+                if (s == null) { yield return new WaitForSeconds(0.4f); continue; }   // let the flow settle
                 yield return TapStack(s, 0.85f);
             }
-            yield return WaitForWin(6f);   // banttaki son kartlar insin → COMPLETE
+            yield return WaitForWin(6f);   // let the last belt cards land → COMPLETE
         }
 
         IEnumerator TapStack(CardStack s, float settle)
         {
             var hand = FindHand();
             if (hand != null) hand.SetAutoTarget(TapPoint(s));
-            yield return new WaitForSeconds(0.45f);          // el süzülür (boşta hafif sürüklenir)
+            yield return new WaitForSeconds(0.45f);          // hand glides in (idle slight drift)
             if (hand != null) hand.Press();
             yield return new WaitForSeconds(0.12f);
             if (s != null && !s.IsEmpty) s.OnTapped();
@@ -173,7 +173,7 @@ namespace CardFactory.Core
         static Vector3 TapPoint(CardStack s) => s.transform.position + Vector3.up * 0.4f;
 
         // ---------------------------------------------------------------------
-        //  BEKLEMELER / SAHNE SORGULARI (rebuild sonrası taze objeler)
+        //  WAITS / SCENE QUERIES (fresh objects after a rebuild)
         // ---------------------------------------------------------------------
 
         IEnumerator WaitForBoard()

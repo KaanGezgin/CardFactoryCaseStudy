@@ -14,8 +14,8 @@ namespace CardFactory.Core
     }
 
     /// <summary>
-    /// Oyun durumunu tutar. Kazanma: eldeki tüm yığınlar boşalıp yolda kart
-    /// kalmayınca. Kaybetme: dock dolunca.
+    /// Holds the game state. Win: when all stacks are emptied and no cards remain on the belt.
+    /// Lose: when the dock fills up.
     /// </summary>
     public class GameManager : MonoBehaviour
     {
@@ -39,9 +39,6 @@ namespace CardFactory.Core
             Level = level;
             Shipped = 0;
             State = GameState.Playing;
-
-            Debug.Log($"[GameManager] Level {levelIndex + 1} yüklendi. " +
-                      $"Yığın: {Level.stacks.Count}, Toplam kart: {Level.TotalCards}");
         }
 
         public void SetSystems(List<CardStack> stackList, Conveyor conveyorRef)
@@ -67,7 +64,6 @@ namespace CardFactory.Core
             State = GameState.Won;
             Sfx.Play("complete", 1.0f);
             Juice.CameraPunch(0.3f);
-            Debug.Log("[GameManager] LEVEL COMPLETE — tüm kartlar bitti.");
         }
 
         public void OnCardShipped()
@@ -80,9 +76,8 @@ namespace CardFactory.Core
         {
             if (State != GameState.Playing) return;
             State = GameState.Lost;
-            Sfx.Play("fail", 1.0f);
+            Sfx.Play("fail", 1.1f);
             Sfx.Haptic();
-            Debug.Log("[GameManager] LEVEL FAILED — dock doldu.");
         }
 
         public void Restart()

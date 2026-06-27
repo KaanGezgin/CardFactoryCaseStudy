@@ -6,10 +6,10 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Aktif kutuları (default 2) tutar; her renk binColorOrder sırasıyla dağıtılır,
-    /// aktif 2 kutu hep farklı renk olur. Kutular bin ANCHOR'larının altına kurulur
-    /// (anchor'lar kalıcı/taşınabilir; kutular her oyunda dinamik). Her kutunun
-    /// kapasitesi o renkten KALAN kart kadardır → son kutu da tam dolar.
+    /// Holds the active bins (default 2); colors are handed out in binColorOrder, and the
+    /// 2 active bins are always different colors. Bins are built under the bin ANCHORS
+    /// (anchors are persistent/movable; bins are dynamic per game). Each bin's capacity is
+    /// the REMAINING cards of that color → the last bin also fills completely.
     /// </summary>
     public class BinManager : MonoBehaviour
     {
@@ -18,13 +18,13 @@ namespace CardFactory.Gameplay
         int cap;
 
         List<CardColor> order;
-        readonly Dictionary<CardColor, int> needed = new();      // renk başına gereken kutu
-        readonly Dictionary<CardColor, int> shipped = new();     // sevk edilen kutu
-        readonly Dictionary<CardColor, int> total = new();       // renk başına toplam kart
-        readonly Dictionary<CardColor, int> captured = new();    // kutulara inen kart
-        readonly Dictionary<CardColor, int> deployedCap = new(); // o renge dağıtılan toplam kapasite
+        readonly Dictionary<CardColor, int> needed = new();      // bins needed per color
+        readonly Dictionary<CardColor, int> shipped = new();     // bins shipped
+        readonly Dictionary<CardColor, int> total = new();       // total cards per color
+        readonly Dictionary<CardColor, int> captured = new();    // cards that landed in bins
+        readonly Dictionary<CardColor, int> deployedCap = new(); // total capacity assigned to that color
 
-        const float CaptureWindow = 1.5f;   // kutuyu bu kadar geçen kart artık geri dönmez
+        const float CaptureWindow = 1.5f;   // a card past the bin by this much no longer returns
 
         public Bin[] Slots { get; private set; }
 
@@ -96,7 +96,7 @@ namespace CardFactory.Gameplay
             return null;
         }
 
-        /// <summary>O renge bu kutu için kapasite = kalan kart (max base kapasite).</summary>
+        /// <summary>Capacity for this bin of that color = remaining cards (capped at base capacity).</summary>
         int CapacityFor(CardColor c)
         {
             int remaining = total[c] - deployedCap[c];
@@ -130,8 +130,8 @@ namespace CardFactory.Gameplay
             {
                 if (bin == null || !bin.Active) continue;
                 if (bin.Color != color || !bin.HasRoom) continue;
-                if (dist < bin.TriggerDist - 0.4f) continue;          // henüz gelmedi
-                if (dist > bin.TriggerDist + CaptureWindow) continue; // geçti → geri dönmez
+                if (dist < bin.TriggerDist - 0.4f) continue;          // not there yet
+                if (dist > bin.TriggerDist + CaptureWindow) continue; // passed → won't return
                 if (best == null || bin.TriggerDist < best.TriggerDist) best = bin;
             }
             return best;
@@ -145,7 +145,7 @@ namespace CardFactory.Gameplay
             CardColor? avoid = OtherActiveColor(slot);
 
             if (shipped[c] < needed[c] && (!avoid.HasValue || c != avoid.Value))
-                Slots[slot].Configure(c, CapacityFor(c));   // aynı renk, kalan kart kadar
+                Slots[slot].Configure(c, CapacityFor(c));   // same color, as many as remain
             else
                 AssignSlot(slot, avoid);
         }

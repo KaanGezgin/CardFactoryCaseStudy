@@ -3,9 +3,9 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Bant üzerindeki chevron (‹‹‹) oklarını yol boyunca akıtır → konveyör hissi.
-    /// Kendi waypoint listesinden çalışır (BeltPath'e bağımlı değil), böylece bake
-    /// edilip kaydedildiğinde de doğru çalışır (serialize edilir).
+    /// Flows the chevron (‹‹‹) arrows along the belt → conveyor feel. Runs off its own
+    /// waypoint list (not dependent on BeltPath), so it still works correctly once baked
+    /// and saved (it is serialized).
     /// </summary>
     public class BeltFlow : MonoBehaviour
     {

@@ -4,27 +4,27 @@ using UnityEngine;
 namespace CardFactory.Data
 {
     /// <summary>
-    /// Level'leri KODDAN ve RASTGELE üretir (asset yok). Reklam çekimi için: okunur, kolay,
-    /// kazanılabilir board'lar.
+    /// Generates levels FROM CODE and RANDOMLY (no assets). For ad capture: readable, easy,
+    /// winnable boards.
     ///
-    /// KISITLAR:
-    ///  • 4 deste, her biri Height(12) kart. Her renk TOPLAM ColorTotal(12) kart = BinCap(6)'nın
-    ///    katı → kutular DAİMA tam 6 dolar (yarım kutu yok; dock'a kart gitse de kutu mantığı bozulmaz).
-    ///  • Renkler BLOK halinde: aynı renk ART ARDA 3..5 kart (MinRun..MaxRun). Bir destede her renk
-    ///    tek blok → ardışık bloklar farklı renk.
-    ///  • Renk dağılımı "doubly-balanced" matris: her hücre ∈ {0,3,4,5}, satır=kolon=12.
+    /// CONSTRAINTS:
+    ///  • 4 stacks, each Height(12) cards. Each color totals ColorTotal(12) cards = a multiple of
+    ///    BinCap(6) → bins ALWAYS fill to a full 6 (no half bins; sending cards to the dock doesn't break bin logic).
+    ///  • Colors come in BLOCKS: the same color RUNS 3..5 cards (MinRun..MaxRun). Each color appears
+    ///    as a single block per stack → consecutive blocks are different colors.
+    ///  • Color distribution is a "doubly-balanced" matrix: each cell ∈ {0,3,4,5}, row=col=12.
     ///
-    /// KAZANILABİLİRLİK: Kutular yalnızca tam 6'da sevk olduğundan dock'a kart göndermek kuyruğu
-    /// bozar → board ZERO-DOCK kazanılabilir olmalı. Önce KARIŞIK blok sırası denenir (`IsWinnable`
-    /// ile doğrulanır); bulunamazsa BANTLI (rank sırası, kesin zero-dock) dizilime düşülür.
+    /// WINNABILITY: Since bins ship only at a full 6, sending cards to the dock breaks the queue →
+    /// the board must be ZERO-DOCK winnable. A MIXED block order is tried first (verified with
+    /// `IsWinnable`); if none is found it falls back to the BANDED order (rank order, guaranteed zero-dock).
     /// </summary>
     public static class DefaultLevels
     {
         const int Colors = 4;
         const int Stacks = 4;
-        const int Height = 12;        // deste yüksekliği (4×12 = 48 kart)
-        const int MinRun = 3;         // aynı renk ART ARDA en az
-        const int MaxRun = 5;         // aynı renk ART ARDA en fazla
+        const int Height = 12;        // stack height (4×12 = 48 cards)
+        const int MinRun = 3;         // minimum same-color run
+        const int MaxRun = 5;         // maximum same-color run
         const int BinCap = 6;
         const int DockCap = 20;
         const int BeltMax = 20;
@@ -38,9 +38,9 @@ namespace CardFactory.Data
         public static LevelData Get(int index) => Generate(new System.Random());
 
         /// <summary>
-        /// REKLAM FAIL board'u: deste TEPELERİ aktif-OLMAYAN renkler (Blue/Red) ile dolu →
-        /// her basış dock'a gider → dock KESİN dolar (kazanılamaz, "fail-bait"). Aktif renkler
-        /// (Green/Yellow) tabanda gömülü, erişilmeden dock dolar. Sıra: Green→Yellow→Blue→Red.
+        /// AD FAIL board: stack TOPS are filled with NON-active colors (Blue/Red) → every tap goes
+        /// to the dock → the dock DEFINITELY fills (unwinnable, "fail-bait"). The active colors
+        /// (Green/Yellow) are buried at the bottom; the dock fills before they are reached. Order: Green→Yellow→Blue→Red.
         /// </summary>
         public static LevelData GetDemoFail()
         {
@@ -58,8 +58,8 @@ namespace CardFactory.Data
 
             var stacks = new List<List<CardColor>>
             {
-                Col(CardColor.Blue, CardColor.Red,  CardColor.Green),   // tepe Blue (aktif değil)
-                Col(CardColor.Red,  CardColor.Blue, CardColor.Yellow),  // tepe Red
+                Col(CardColor.Blue, CardColor.Red,  CardColor.Green),   // top Blue (not active)
+                Col(CardColor.Red,  CardColor.Blue, CardColor.Yellow),  // top Red
                 Col(CardColor.Blue, CardColor.Red,  CardColor.Green),
                 Col(CardColor.Red,  CardColor.Blue, CardColor.Yellow),
             };
@@ -76,15 +76,15 @@ namespace CardFactory.Data
         }
 
         /// <summary>
-        /// REKLAM SUCCESS board'u. Sıra (rank): Green→Yellow→Blue→Red. BANTLI (her deste tepe=erken
-        /// rank) → ZERO-DOCK kazanılabilir: doğru oynanışta tüm kartlar biter. Her renk 12, bloklar 4.
+        /// AD SUCCESS board. Order (rank): Green→Yellow→Blue→Red. BANDED (each stack top = earliest
+        /// rank) → ZERO-DOCK winnable: with correct play all cards clear. Each color 12, blocks of 4.
         /// </summary>
         public static LevelData GetDemo()
         {
             var order = new List<CardColor>
             { CardColor.Green, CardColor.Yellow, CardColor.Blue, CardColor.Red };
 
-            // top = tepe, bot = taban. Liste index 0 = taban.
+            // top = top, bot = bottom. List index 0 = bottom.
             List<CardColor> Col(CardColor top, CardColor mid, CardColor bot)
             {
                 var s = new List<CardColor>();
@@ -115,21 +115,18 @@ namespace CardFactory.Data
 
         static LevelData Generate(System.Random rng)
         {
-            // Karışık blok sırası dene → zero-dock kazanılabilirse al.
+            // Try a mixed block order → take it if zero-dock winnable.
             for (int attempt = 0; attempt < MaxAttempts; attempt++)
             {
                 var matrix = BalancedMatrix(rng);
                 var order = ShuffledOrder(rng);
                 var level = BuildFromMatrix(matrix, order, rng, mixed: true);
                 if (IsWinnable(level.stacks, order))
-                {
-                    Debug.Log($"[DefaultLevels] Karışık bloklu level. Sıra: {string.Join(" → ", order)}");
                     return level;
-                }
             }
 
-            // Garantili: BANTLI dizilim (rank sırası, kesin zero-dock).
-            Debug.LogWarning("[DefaultLevels] Karışık zero-dock bulunamadı; bantlı dizilime düşüldü.");
+            // Guaranteed: BANDED order (rank order, definite zero-dock).
+            Debug.LogWarning("[DefaultLevels] No mixed zero-dock layout found; fell back to the banded layout.");
             return BuildFromMatrix(BalancedMatrix(rng), ShuffledOrder(rng), rng, mixed: false);
         }
 
@@ -141,19 +138,19 @@ namespace CardFactory.Data
         }
 
         // ---------------------------------------------------------------------
-        //  RENK DAĞILIMI: doubly-balanced matris (hücre ∈ {0,3,4,5}, satır=kolon=12)
+        //  COLOR DISTRIBUTION: doubly-balanced matrix (cell ∈ {0,3,4,5}, row=col=12)
         // ---------------------------------------------------------------------
 
         /// <summary>
-        /// matrix[s][r] = s. destedeki rank-r kart sayısı. Başlangıç: her renk bir desteyi
-        /// ATLAR (permütasyon), diğer 3 destede 4'er → satır=kolon=12, hücreler {0,4}. Sonra
-        /// sum-koruyan 2×2 takaslarla 3/5 çeşitliliği eklenir (hücreler {0,3,4,5}).
+        /// matrix[s][r] = number of rank-r cards in stack s. Start: each color SKIPS one stack
+        /// (a permutation), with 4 in each of the other 3 stacks → row=col=12, cells {0,4}. Then
+        /// sum-preserving 2×2 swaps add 3/5 variety (cells {0,3,4,5}).
         /// </summary>
         static int[][] BalancedMatrix(System.Random rng)
         {
-            var skip = new int[Colors];                 // skip[r] = rank r'nin atladığı deste
+            var skip = new int[Colors];                 // skip[r] = the stack that rank r skips
             for (int r = 0; r < Colors; r++) skip[r] = r;
-            Shuffle(skip, rng);                          // permütasyon → her deste tam 1 renk atlar
+            Shuffle(skip, rng);                          // permutation → each stack skips exactly 1 color
 
             var m = new int[Stacks][];
             for (int s = 0; s < Stacks; s++)
@@ -167,7 +164,7 @@ namespace CardFactory.Data
                 int s1 = rng.Next(Stacks), s2 = rng.Next(Stacks);
                 int c1 = rng.Next(Colors), c2 = rng.Next(Colors);
                 if (s1 == s2 || c1 == c2) continue;
-                // Toplamları koru: s1c1--, s1c2++, s2c1++, s2c2--  (hepsi {3,4,5} aralığında kalmalı).
+                // Preserve sums: s1c1--, s1c2++, s2c1++, s2c2--  (all must stay within {3,4,5}).
                 if (m[s1][c1] >= 4 && m[s2][c2] >= 4 &&
                     m[s1][c2] >= 3 && m[s1][c2] <= 4 &&
                     m[s2][c1] >= 3 && m[s2][c1] <= 4)
@@ -184,17 +181,17 @@ namespace CardFactory.Data
             var stacks = new List<List<CardColor>>(Stacks);
             for (int s = 0; s < Stacks; s++)
             {
-                // Bloklar: (rank, boyut) — boyut = hücre değeri (>0).
-                var blocks = new List<int>();            // rank listesi
+                // Blocks: (rank, size) — size = cell value (>0).
+                var blocks = new List<int>();            // list of ranks
                 for (int r = 0; r < Colors; r++)
                     if (matrix[s][r] > 0) blocks.Add(r);
-                if (mixed) Shuffle(blocks, rng);          // karışık sıra; değilse rank-artan (bantlı)
+                if (mixed) Shuffle(blocks, rng);          // mixed order; otherwise rank-ascending (banded)
 
                 var topDown = new List<CardColor>(Height);
                 foreach (int r in blocks)
                     for (int k = 0; k < matrix[s][r]; k++) topDown.Add(order[r]);
 
-                topDown.Reverse();                        // LevelData: index 0 = en alt
+                topDown.Reverse();                        // LevelData: index 0 = bottom
                 stacks.Add(topDown);
             }
 
@@ -210,12 +207,13 @@ namespace CardFactory.Data
         }
 
         // ---------------------------------------------------------------------
-        //  ZERO-DOCK KAZANILABİLİRLİK ÇÖZÜCÜSÜ
+        //  ZERO-DOCK WINNABILITY SOLVER
         // ---------------------------------------------------------------------
 
         /// <summary>
-        /// Hiç dock kullanmadan kazanılabilir mi? Aktif = order'da kart kalan ilk 2 renk.
-        /// Tepesi aktif olan deste gönderilir; hiçbir tepe aktif değilse (kart kaldıysa) → hayır.
+        /// Can it be won without using the dock at all? Active = the first 2 colors in order that
+        /// still have cards. A stack whose top is active is sent; if no top is active (and cards
+        /// remain) → no.
         /// </summary>
         static bool IsWinnable(List<List<CardColor>> stacks, List<CardColor> order)
         {

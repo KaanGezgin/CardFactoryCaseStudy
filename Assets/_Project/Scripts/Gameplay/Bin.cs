@@ -6,9 +6,9 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Sevkiyat konteyneri: sabit hedef renk + kapasite. Geriye yatık duran, görünür
-    /// slotlu konteyner gövdesi. Boş slotlar hedef rengin koyu tonunda; kart geldikçe
-    /// slot tam renge boyanır. Dolunca BinManager'a haber verir.
+    /// Shipping container: fixed target color + capacity. A leaning, visibly slotted container
+    /// body. Empty slots use a dark shade of the target color; as cards arrive each slot is
+    /// painted the full color. When full it notifies BinManager.
     /// </summary>
     public class Bin : MonoBehaviour
     {
@@ -16,7 +16,7 @@ namespace CardFactory.Gameplay
         public int Capacity { get; private set; }
         public int Fill { get; private set; }
         public bool Active { get; private set; }
-        public float TriggerDist { get; set; }   // yol üzerinde yakalama noktası
+        public float TriggerDist { get; set; }   // capture point along the path
 
         public bool HasRoom => Active && Fill < Capacity;
 
@@ -26,26 +26,26 @@ namespace CardFactory.Gameplay
         int inFlight;
         int landed;
 
-        Material fillCellMat;      // dolu hücre (parlak hedef renk)
-        Material emptyCellMat;     // boş hücre (koyu/oyuk)
+        Material fillCellMat;      // filled cell (bright target color)
+        Material emptyCellMat;     // empty cell (dark/hollow)
 
-        Renderer[] cells;          // AYRIK dolum hücreleri (alttan üste); her biri boş/dolu
+        Renderer[] cells;          // DISCRETE fill cells (bottom to top); each empty/filled
         Transform cellsRoot;
-        Renderer[] frameRends;     // kapalı çerçeve (sol/sağ/üst/alt) → kutu rengine boyanır
-        int shownFill;             // dolu hücre sayısı
+        Renderer[] frameRends;     // closed frame (left/right/top/bottom) → painted the bin color
+        int shownFill;             // number of filled cells
 
-        Transform marker;          // üstte hedef-renk durum küresi (lamba)
+        Transform marker;          // target-color status sphere (lamp) on top
         Renderer markerRend;
         Renderer bodyRend;
 
         const float BodyHeight = 1.35f;
         const float SlotFrontZ = -0.28f;
-        const float LeanBack = 28f;     // konteyner hafif geriye yatar
-        const float LampSize = 0.22f;   // durum küresi çapı
+        const float LeanBack = 28f;     // container leans back slightly
+        const float LampSize = 0.22f;   // status sphere diameter
 
-        // Ayrık dolum hücreleri için kanal geometrisi.
+        // Channel geometry for the discrete fill cells.
         const float FillBottomY = 0.16f;
-        const float FillH = BodyHeight - 0.26f;   // doldurulabilir yükseklik
+        const float FillH = BodyHeight - 0.26f;   // fillable height
         const float FillWidth = 0.7f;
         const float FillDepth = 0.34f;
 
@@ -59,7 +59,7 @@ namespace CardFactory.Gameplay
 
             var frameColor = new Color(0.14f, 0.16f, 0.19f);
 
-            // Ana konteyner gövdesi — dikey dikdörtgen kasa.
+            // Main container body — a vertical rectangular case.
             var bodyGo = ProcMesh.RoundedCube("ContainerBody");
             DestroyCollider(bodyGo);
             bodyGo.transform.SetParent(transform, false);
@@ -68,7 +68,7 @@ namespace CardFactory.Gameplay
             bodyRend = bodyGo.GetComponent<Renderer>();
             bodyRend.sharedMaterial = GameBootstrap.NewLitMaterial(frameColor);
 
-            // Üst KAPAK — parlak beyaz lid (referanstaki gibi konteyner kapağı + tutamak).
+            // Top LID — a glossy white lid (container lid + handle, like the reference).
             var topRail = ProcMesh.RoundedCube("ContainerLid");
             DestroyCollider(topRail);
             topRail.transform.SetParent(transform, false);
@@ -78,9 +78,9 @@ namespace CardFactory.Gameplay
             lidMat.SetFloat("_Smoothness", 0.8f);
             topRail.GetComponent<Renderer>().sharedMaterial = lidMat;
 
-            // (ContainerBase + oluklu şeritler + köşe direkleri kaldırıldı → temiz konteyner.)
+            // (ContainerBase + ribbed strips + corner posts removed → clean container.)
 
-            // Hedef-renk durum lambası — üstte parlak KÜRE (referans gibi).
+            // Target-color status lamp — a bright SPHERE on top (like the reference).
             var markerGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             markerGo.name = "ContainerLamp";
             DestroyCollider(markerGo);
@@ -90,10 +90,10 @@ namespace CardFactory.Gameplay
             markerRend = markerGo.GetComponent<Renderer>();
             marker = markerGo.transform;
 
-            BuildFrame();   // hücreleri çevreleyen kapalı çerçeve (sol/sağ/üst/alt)
+            BuildFrame();   // closed frame surrounding the cells (left/right/top/bottom)
 
-            // Zemin kontakt gölgesi (yumuşak AO hissi). Konteyner eğik durduğundan
-            // gölge world-space'te flat tutulur (SpawnContactShadow world rotasyon ayarlar).
+            // Ground contact shadow (soft AO feel). Since the container leans, the shadow is
+            // kept flat in world space (SpawnContactShadow sets the world rotation).
             GameBootstrap.SpawnContactShadow(transform, new Vector3(pos.x, 0.04f, pos.z + 0.12f), 1.25f, 1.25f);
         }
 
@@ -113,14 +113,14 @@ namespace CardFactory.Gameplay
             Active = true;
 
             var full = CardPalette.Get(color);
-            fillCellMat = GameBootstrap.NewLitMaterial(full);          // DOLU hücre: parlak, doygun
+            fillCellMat = GameBootstrap.NewLitMaterial(full);          // FILLED cell: bright, saturated
             fillCellMat.SetFloat("_Smoothness", 0.6f);
             fillCellMat.EnableKeyword("_EMISSION");
             fillCellMat.SetColor("_EmissionColor", full * 0.3f);
-            emptyCellMat = GameBootstrap.NewLitMaterial(full * 0.32f); // BOŞ hücre: kutu renginin KOYU hali
+            emptyCellMat = GameBootstrap.NewLitMaterial(full * 0.32f); // EMPTY cell: dark shade of the bin color
             emptyCellMat.SetFloat("_Smoothness", 0.18f);
 
-            // Çerçeve (sol/sağ/üst/alt) = kutu rengi (hafif tonlu → dolu hücreden ayrışsın).
+            // Frame (left/right/top/bottom) = bin color (slightly tinted → distinct from a filled cell).
             var frameMat = GameBootstrap.NewLitMaterial(full * 0.7f);
             if (frameRends != null)
                 foreach (var r in frameRends)
@@ -139,7 +139,7 @@ namespace CardFactory.Gameplay
                 markerRend.sharedMaterial = lightMat;
             }
 
-            // Hücreleri (kapasiteye göre) yeniden kur, hepsi BOŞ.
+            // Rebuild the cells (per capacity), all EMPTY.
             shownFill = 0;
             BuildCells(capacity);
 
@@ -156,7 +156,7 @@ namespace CardFactory.Gameplay
 
         void Update()
         {
-            // Durum küresi hafif nabız atar.
+            // The status sphere pulses gently.
             if (marker != null && Active)
             {
                 float p = 0.9f + Mathf.Sin(Time.time * 4.5f) * 0.1f;
@@ -164,16 +164,16 @@ namespace CardFactory.Gameplay
             }
         }
 
-        // Hücreleri çevreleyen KAPALI çerçeve (sol/sağ duvar + üst/alt) — konteyner hissi,
-        // yandan kapalı. Kapasiteden bağımsız (sabit FillH), Init'te bir kez kurulur.
+        // CLOSED frame surrounding the cells (left/right wall + top/bottom) — container feel,
+        // closed on the sides. Independent of capacity (fixed FillH); built once in Init.
         void BuildFrame()
         {
             frameRends = new Renderer[4];
             int fi = 0;
             float midY = FillBottomY + FillH * 0.5f;
-            float frontZ = SlotFrontZ - 0.06f;   // hücrelerin önünde durur → çerçeveler
+            float frontZ = SlotFrontZ - 0.06f;   // sits in front of the cells → frames them
 
-            foreach (var sx in new[] { -1f, 1f })   // sol/sağ duvar
+            foreach (var sx in new[] { -1f, 1f })   // left/right wall
             {
                 var wall = ProcMesh.RoundedCube("CellWall");
                 DestroyCollider(wall);
@@ -183,7 +183,7 @@ namespace CardFactory.Gameplay
                 frameRends[fi++] = wall.GetComponent<Renderer>();
             }
 
-            float[] barY = { FillBottomY + FillH + 0.04f, FillBottomY - 0.04f };   // üst/alt çerçeve
+            float[] barY = { FillBottomY + FillH + 0.04f, FillBottomY - 0.04f };   // top/bottom frame
             foreach (var yy in barY)
             {
                 var bar = ProcMesh.RoundedCube("CellFrameBar");
@@ -193,10 +193,10 @@ namespace CardFactory.Gameplay
                 bar.transform.localScale = new Vector3(FillWidth + 0.26f, 0.1f, 0.24f);
                 frameRends[fi++] = bar.GetComponent<Renderer>();
             }
-            // Renk Configure'da (hedef renge göre) verilir.
+            // Color is set in Configure (per target color).
         }
 
-        // AYRIK dolum hücreleri (alttan üste). Hepsi boş başlar; kart inince ilgili hücre dolu olur.
+        // DISCRETE fill cells (bottom to top). All start empty; when a card lands the matching cell fills.
         void BuildCells(int capacity)
         {
             if (cellsRoot != null) Object.Destroy(cellsRoot.gameObject);
@@ -206,7 +206,7 @@ namespace CardFactory.Gameplay
 
             cells = new Renderer[capacity];
             float pitch = capacity > 0 ? FillH / capacity : FillH;
-            float cellH = pitch * 0.8f;            // hücreler arası küçük boşluk
+            float cellH = pitch * 0.8f;            // small gap between cells
             for (int i = 0; i < capacity; i++)
             {
                 float y = FillBottomY + (i + 0.5f) * pitch;
@@ -248,7 +248,7 @@ namespace CardFactory.Gameplay
                 if (gm != null) gm.OnCardShipped();
                 if (mgr != null) mgr.NotifyCaptured(Color);
 
-                // Dolunca normal sevk; ya da renk tamamen tükendiyse yarım kutuyu da sevk et.
+                // Ship normally when full; or if the color is fully exhausted, ship a partial bin too.
                 if (inFlight <= 0 && Active &&
                     (Fill >= Capacity || (mgr != null && mgr.IsColorExhausted(Color))))
                     Ship();
@@ -258,7 +258,7 @@ namespace CardFactory.Gameplay
         void FillSlot(int idx)
         {
             shownFill = Mathf.Min(Capacity, shownFill + 1);
-            // İlgili hücre BOŞ→DOLU: parlak renge boyanır + tatmin edici pop.
+            // The matching cell goes EMPTY→FILLED: painted bright + a satisfying pop.
             if (cells != null && idx >= 0 && idx < cells.Length && cells[idx] != null)
             {
                 cells[idx].sharedMaterial = fillCellMat;

@@ -8,9 +8,9 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Kartları U-şekilli yol boyunca taşır (BeltPath, yay-uzunluğu). Yol boyunca
-    /// eşleşen kart bir kutuya çekilir; eşleşmeden yolun sonuna ulaşan Dock'a
-    /// düşer. Belt sayacı (X/20) burada tutulur.
+    /// Carries cards along the U-shaped path (BeltPath, arc length). A matching card on the
+    /// way is pulled into a bin; one that reaches the end without matching falls into the
+    /// Dock. The belt counter (X/20) is kept here.
     /// </summary>
     public class Conveyor : MonoBehaviour
     {
@@ -20,14 +20,14 @@ namespace CardFactory.Gameplay
         Dock dock;
         FactoryGate gate;
         BeltPath path;
-        Transform entryPortal;   // sahnedeki "GateSlot" → kartlar buradan giriyormuş gibi
+        Transform entryPortal;   // the scene's "GateSlot" → cards appear to enter through it
 
         float endDist;
         const float Spacing = 0.78f;
-        const float CardLift = 0.8f;    // dik kart belt yüzeyinin üstünde dursun
-        const float BeltTurnSpeed = 540f;   // viraj takibi: kart ilerleme yönüne dönme hızı (°/s)
+        const float CardLift = 0.8f;    // keep the upright card above the belt surface
+        const float BeltTurnSpeed = 540f;   // turn-following: card rotation speed toward the travel direction (°/s)
 
-        // Bant kartı DİK durur (domino): X=genişlik, Y=yükseklik, Z=bant yönünde ince.
+        // Belt card stands UPRIGHT (domino): X=width, Y=height, Z=thin along the belt direction.
         static readonly Vector3 BeltCardScale = new Vector3(1f, 1.45f, 0.25f);
 
         readonly List<Card> belt = new();
@@ -47,8 +47,8 @@ namespace CardFactory.Gameplay
             endDist = path.Length;
             gate.SetCount(0, cfg.beltMaxCards);
 
-            // Giriş portalı = sahnedeki "GateSlot" objesi (kapının üst yarığı). Bulunamazsa
-            // doğrudan belt başına girilir (eski davranış).
+            // Entry portal = the scene's "GateSlot" object (the gate's top slot). If not found,
+            // cards enter straight at the belt start (legacy behavior).
             entryPortal = gateRef != null && gateRef.transform.parent != null
                 ? gateRef.transform.parent.Find("GateSlot")
                 : null;
@@ -88,7 +88,7 @@ namespace CardFactory.Gameplay
             go.transform.SetParent(transform, true);
             var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col);
-            go.transform.localScale = Vector3.zero;   // sırası gelene kadar gizli
+            go.transform.localScale = Vector3.zero;   // hidden until its turn
 
             var card = go.AddComponent<Card>();
             card.Setup(color, MatFor(color));
@@ -101,7 +101,7 @@ namespace CardFactory.Gameplay
 
             go.transform.position = origin;
             card.Entering = true;
-            // Sırayla (staggered) havaya kalkıp bant BAŞINDAN (kapı) içeri gir.
+            // Staggered: lift into the air and enter from the belt START (gate).
             StartCoroutine(EnterCard(card, WorldAt(0f), origin, index * 0.1f));
             belt.Add(card);
         }
@@ -113,31 +113,31 @@ namespace CardFactory.Gameplay
 
             card.transform.localScale = BeltCardScale;
             Juice.PopIn(card.transform, BeltCardScale, 0.12f);
-            Sfx.Play("tick", 0.4f);   // kart süzülmeye başlar başlamaz → anında hafif tık (geç kalmasın)
+            Sfx.Play("tick", 0.4f);   // the moment the card starts gliding → instant soft tick (no lag)
 
             if (entryPortal != null)
             {
-                // Aşama A: desteden GateSlot'a (üst yarık) yay çizerek girer.
+                // Stage A: arc from the stack into the GateSlot (top slot).
                 yield return ArcMove(card, origin, entryPortal.position, 1.1f, 0.34f);
                 if (card == null) yield break;
-                // Aşama B: yarıktan belt başına/ön ağza iner (makinenin içinden çıkmış gibi).
+                // Stage B: drop from the slot to the belt start / front mouth (as if coming out of the machine).
                 yield return ArcMove(card, entryPortal.position, beltEntry, 0.15f, 0.24f);
             }
             else
             {
-                // Portal yoksa: doğrudan belt başına yüksek yayla gir (eski davranış).
+                // No portal: enter the belt start directly with a high arc (legacy behavior).
                 yield return ArcMove(card, origin, beltEntry, 3.2f, 0.5f);
             }
 
             if (card != null)
             {
                 card.transform.position = beltEntry;
-                card.transform.rotation = Quaternion.LookRotation(path.TangentAt(0f), Vector3.up);  // giriş yönüyle başla
+                card.transform.rotation = Quaternion.LookRotation(path.TangentAt(0f), Vector3.up);  // start with the entry direction
                 card.Entering = false;
             }
         }
 
-        /// <summary>Kartı from→to parabolik yay ile taşır (height = tepe yüksekliği).</summary>
+        /// <summary>Moves the card from→to along a parabolic arc (height = peak height).</summary>
         IEnumerator ArcMove(Card card, Vector3 from, Vector3 to, float height, float dur)
         {
             float t = 0f;
@@ -164,14 +164,14 @@ namespace CardFactory.Gameplay
             for (int i = 0; i < belt.Count; i++)
             {
                 var card = belt[i];
-                if (card.Entering) continue;   // stack'ten süzülüyor; konumunu MoveArc sürer
+                if (card.Entering) continue;   // gliding from the stack; MoveArc drives its position
                 float maxAllowed = (i == 0) ? endDist
                                             : Mathf.Min(endDist, belt[i - 1].BeltDist - Spacing);
                 float target = Mathf.Min(endDist, maxAllowed);
                 card.BeltDist = Mathf.MoveTowards(card.BeltDist, target, cfg.conveyorSpeed * Time.deltaTime);
                 card.transform.position = WorldAt(card.BeltDist);
 
-                // Viraj takibi: kartı yolun ilerleme yönüne (teğet) yumuşakça döndür.
+                // Turn-following: smoothly rotate the card toward the path's travel direction (tangent).
                 var want = Quaternion.LookRotation(path.TangentAt(card.BeltDist), Vector3.up);
                 card.transform.rotation = Quaternion.RotateTowards(
                     card.transform.rotation, want, BeltTurnSpeed * Time.deltaTime);
@@ -180,7 +180,7 @@ namespace CardFactory.Gameplay
             for (int i = belt.Count - 1; i >= 0; i--)
             {
                 var card = belt[i];
-                if (card.Entering) continue;   // giriş bitene kadar yakalanmaz/dock'a düşmez
+                if (card.Entering) continue;   // not captured / not dropped to dock until entry finishes
                 var captor = bins.FindCaptor(card.Color, card.BeltDist);
                 if (captor != null)
                 {

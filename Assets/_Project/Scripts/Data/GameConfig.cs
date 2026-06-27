@@ -4,37 +4,37 @@ using UnityEngine;
 namespace CardFactory.Data
 {
     /// <summary>
-    /// Hissi/oynanış ayarları. ScriptableObject DEĞİL: zero-setup için plain
-    /// serializable class. GameConfig.Default ile kod-içi defaultlar gelir.
-    /// Tüm sayılar buradan veya LevelData'dan ayarlanır; koda dokunmadan tweak.
+    /// Feel/gameplay settings. NOT a ScriptableObject: a plain serializable class for
+    /// zero-setup. GameConfig.Default provides the in-code defaults. Every number is tuned
+    /// here or in LevelData; tweak without touching code.
     /// </summary>
     [Serializable]
     public class GameConfig
     {
-        [Header("Konveyör")]
-        public float conveyorSpeed = 4f;       // birim/sn (biraz daha hızlı)
-        public int beltMaxCards = 20;          // yol limiti (X/20)
+        [Header("Conveyor")]
+        public float conveyorSpeed = 4f;       // units/sec (a bit faster)
+        public int beltMaxCards = 20;          // belt limit (X/20)
 
-        [Header("Kutular")]
-        public int activeBinCount = 2;         // daima 2 (sabit)
-        public int binCapacity = 10;           // kutu dolum kapasitesi
+        [Header("Bins")]
+        public int activeBinCount = 2;         // always 2 (fixed)
+        public int binCapacity = 10;           // bin fill capacity
 
         [Header("Dock")]
-        public int dockCapacity = 20;          // sabit; genişletme yok
+        public int dockCapacity = 20;          // fixed; no expansion
 
-        [Header("Juice süreleri (sn)")]
+        [Header("Juice durations (sec)")]
         public float cardSendDuration = 0.25f;
         public float binFillDuration = 0.20f;
         public float popDuration = 0.18f;
         public float warningFlashDuration = 0.30f;
 
-        [Header("Kamera / sahne")]
-        public Color backgroundColor = new Color(0.55f, 0.74f, 0.92f); // açık mavi (gerçek oyuna yakın)
+        [Header("Camera / scene")]
+        public Color backgroundColor = new Color(0.55f, 0.74f, 0.92f); // light blue (close to the real game)
 
-        [Header("Reklam efektleri")]
-        public bool showHandPointer = true;     // ghost el-pointer
-        public bool dockTensionPulse = true;    // dock dolarken kırmızı nabız
-        public bool adMode = false;             // true → Play'de otomatik reklam sekansı (AdDirector). 'A' tuşu da başlatır.
+        [Header("Ad effects")]
+        public bool showHandPointer = true;     // ghost hand-pointer
+        public bool dockTensionPulse = true;    // red pulse while the dock fills
+        public bool adMode = false;             // true → auto ad sequence on Play (AdDirector). The 'A' key also starts it.
 
         public static GameConfig Default => new GameConfig();
     }

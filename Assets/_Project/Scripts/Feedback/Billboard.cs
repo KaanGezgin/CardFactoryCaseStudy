@@ -3,9 +3,9 @@ using UnityEngine;
 namespace CardFactory.Feedback
 {
     /// <summary>
-    /// 3B etiketleri (TextMesh / quad) kameraya dönük tutar; böylece objeye gömülü
-    /// dursalar da hep okunaklı kalırlar. Kamera neredeyse sabit olsa da punch
-    /// animasyonlarında hizayı korur.
+    /// Keeps 3D labels (TextMesh / quad) facing the camera so they stay readable even when
+    /// embedded in an object. The camera is nearly static, but this preserves alignment
+    /// during punch animations.
     /// </summary>
     public class Billboard : MonoBehaviour
     {

@@ -3,14 +3,14 @@ using UnityEngine;
 namespace CardFactory.Feedback
 {
     /// <summary>
-    /// Arka plan dekoru: verilen item'ları yerel X ekseninde kaydırır ve uçtan
-    /// uca sarar (sonsuz akan bant üstünde giden kutular hissi). Kendi item
-    /// listesinden çalışır (serialize edilir) → bake edilip kaydedildiğinde de çalışır.
+    /// Background decor: slides the given items along their local X axis and wraps them
+    /// end to end (the feel of boxes riding an endless conveyor). Runs off its own
+    /// serialized item list → still works once baked and saved.
     /// </summary>
     public class DecorMover : MonoBehaviour
     {
         [SerializeField] Transform[] items;
-        [SerializeField] float speed = 1.6f;   // işaret yönü = hareket yönü
+        [SerializeField] float speed = 1.6f;   // sign = direction of travel
         [SerializeField] float minX = -12f;
         [SerializeField] float maxX = 12f;
 

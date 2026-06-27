@@ -5,8 +5,8 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Yol (belt) giriş kapısı: X/20 sayacını tutar ve limit aşılınca kırmızı
-    /// uyarı flaşı verir. Sayaç değerini HUD okur; flaş görseli kapı küpünde.
+    /// Belt entry gate: holds the X/20 counter and flashes red when the limit is exceeded.
+    /// The HUD reads the counter value; the flash visual is on the gate cube.
     /// </summary>
     public class FactoryGate : MonoBehaviour
     {
@@ -19,9 +19,9 @@ namespace CardFactory.Gameplay
         GameConfig cfg;
         TextMesh label;
 
-        Transform progressFill;            // sayaç altı dolum çubuğu (sol kenardan büyür)
+        Transform progressFill;            // fill bar under the counter (grows from the left edge)
         Renderer progressFillRend;
-        const float ProgressWidth = 0.88f; // anchor-local tam genişlik
+        const float ProgressWidth = 0.88f; // full width, anchor-local
 
         public void Init(Renderer gateRenderer, Color gateColor, GameConfig config, TextMesh counterLabel,
                          Transform progressBarFill = null)
@@ -61,8 +61,8 @@ namespace CardFactory.Gameplay
         }
 
         /// <summary>
-        /// Baked kapının referanslarını yeniden bağlar (Init çağrılmaz). Sayaç
-        /// etiketi sahnedeki "GateCounter" altından bulunur.
+        /// Rebinds the baked gate's references (Init is not called). The counter label is
+        /// found under the scene's "GateCounter".
         /// </summary>
         public void Rebind(GameConfig config)
         {
@@ -74,11 +74,11 @@ namespace CardFactory.Gameplay
             if (anchor != null)
             {
                 label = anchor.GetComponentInChildren<TextMesh>();
-                // Eski Billboard'ı kaldır → rotasyon Inspector'daki gibi kalsın (Play'de kaymaz).
+                // Remove the old Billboard → rotation stays as set in the Inspector (no drift on Play).
                 var bb = anchor.GetComponent<CardFactory.Feedback.Billboard>();
                 if (bb != null) Destroy(bb);
             }
-            // Baked progress bar dolumunu yeniden bağla (varsa).
+            // Rebind the baked progress bar fill (if present).
             var prog = parent != null ? parent.Find("GateProgress") : null;
             BindProgress(prog != null ? prog.Find("GateProgressFill") : null);
         }
@@ -90,7 +90,7 @@ namespace CardFactory.Gameplay
             if (label != null)
             {
                 label.text = $"{count}/{max}";
-                // Limite yaklaşınca sarı, doluyken kırmızı tonla uyar.
+                // Yellow as it nears the limit, red when full.
                 label.color = count >= max ? new Color(1f, 0.35f, 0.35f)
                             : count >= max - 2 ? new Color(1f, 0.85f, 0.35f)
                             : Color.white;
@@ -98,7 +98,7 @@ namespace CardFactory.Gameplay
             UpdateProgress(max > 0 ? (float)count / max : 0f);
         }
 
-        /// <summary>Yeni level başlarken görseli sıfırlar (kapı kalıcı obje).</summary>
+        /// <summary>Resets the visual when a new level starts (the gate is a persistent object).</summary>
         public void ResetVisual()
         {
             StopAllCoroutines();
@@ -141,7 +141,7 @@ namespace CardFactory.Gameplay
                 body.sharedMaterial.SetColor("_BaseColor", baseColor);
                 body.sharedMaterial.color = baseColor;
             }
-            if (label != null) SetCount(Count, Max);   // rengi sayaca göre geri al
+            if (label != null) SetCount(Count, Max);   // restore color based on the count
             WarningActive = false;
         }
     }

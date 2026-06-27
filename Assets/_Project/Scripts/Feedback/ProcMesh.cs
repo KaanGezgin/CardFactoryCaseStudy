@@ -3,11 +3,11 @@ using UnityEngine;
 namespace CardFactory.Feedback
 {
     /// <summary>
-    /// Prosedürel yuvarlatılmış küp mesh'i (harici asset YOK). Tüm kutu nesneleri
-    /// (kart, slot, kasa, kapı, dock parçaları) tek paylaşılan BİRİM mesh'i kullanır
-    /// ve non-uniform localScale ile boyutlanır — yani CreatePrimitive(Cube)'un
-    /// yumuşak köşeli, parlak "cartoon" muadili. Köşe yarıçapı birim küpün yarısının
-    /// oranı olduğu için aşırı uzun parçalarda kullanılmaz (bant düz kalır).
+    /// Procedural rounded-cube mesh (NO external assets). Every box object (card, slot, crate,
+    /// gate, dock parts) uses one shared UNIT mesh sized with a non-uniform localScale — i.e.
+    /// the soft-cornered, glossy "cartoon" equivalent of CreatePrimitive(Cube). Because the
+    /// corner radius is a fraction of the unit cube's half-extent, it is not used for very long
+    /// parts (the belt stays flat).
     /// </summary>
     public static class ProcMesh
     {
@@ -22,7 +22,7 @@ namespace CardFactory.Feedback
             }
         }
 
-        /// <summary>CreatePrimitive(Cube) yerine: birim yuvarlak-küp mesh'li, collider'sız GO.</summary>
+        /// <summary>In place of CreatePrimitive(Cube): a collider-less GO with the unit rounded-cube mesh.</summary>
         public static GameObject RoundedCube(string name = "Box")
         {
             var go = new GameObject(name);
@@ -45,7 +45,7 @@ namespace CardFactory.Feedback
             var tris = new int[seg * seg * 6 * faces];
 
             int vi = 0, ti = 0;
-            // n, u, v seçimi cross(u, v) == n olacak şekilde (winding sonradan düzeltiliyor).
+            // n, u, v chosen so that cross(u, v) == n (winding is fixed up afterwards).
             AddFace(Vector3.right,   Vector3.up,      Vector3.forward, h, e, radius, seg, verts, norms, uvs, tris, ref vi, ref ti);
             AddFace(Vector3.left,    Vector3.forward, Vector3.up,      h, e, radius, seg, verts, norms, uvs, tris, ref vi, ref ti);
             AddFace(Vector3.up,      Vector3.forward, Vector3.right,   h, e, radius, seg, verts, norms, uvs, tris, ref vi, ref ti);
@@ -53,7 +53,7 @@ namespace CardFactory.Feedback
             AddFace(Vector3.forward, Vector3.right,   Vector3.up,      h, e, radius, seg, verts, norms, uvs, tris, ref vi, ref ti);
             AddFace(Vector3.back,    Vector3.up,      Vector3.right,   h, e, radius, seg, verts, norms, uvs, tris, ref vi, ref ti);
 
-            // Winding'i, sakladığımız (dışa dönük) normallere göre garantiye al.
+            // Guarantee winding against the (outward-facing) normals we stored.
             for (int t = 0; t < tris.Length; t += 3)
             {
                 Vector3 p0 = verts[tris[t]], p1 = verts[tris[t + 1]], p2 = verts[tris[t + 2]];

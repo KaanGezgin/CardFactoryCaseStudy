@@ -5,11 +5,11 @@ using UnityEngine.Rendering.Universal;
 namespace CardFactory.EditorTools
 {
     /// <summary>
-    /// SSAO (Screen Space Ambient Occlusion) Renderer Feature'ını URP renderer
-    /// asset'lerine PROGRAMATİK ekler (elle .asset düzenlemeden, "her şey koddan/araçtan").
-    /// SSAO bir Volume override değil, bir Renderer Feature olduğundan koddan runtime'da
-    /// kurulamaz; bu yüzden tek seferlik editör aracı. Idempotent: zaten varsa atlar.
-    /// Manuel alternatif: URP Renderer asset → Add Renderer Feature → Screen Space Ambient Occlusion.
+    /// Adds the SSAO (Screen Space Ambient Occlusion) Renderer Feature to the URP renderer
+    /// assets PROGRAMMATICALLY (without hand-editing the .asset, "everything from code/tools").
+    /// SSAO is a Renderer Feature, not a Volume override, so it can't be set up from code at
+    /// runtime; hence this one-off editor tool. Idempotent: skips if already present.
+    /// Manual alternative: URP Renderer asset → Add Renderer Feature → Screen Space Ambient Occlusion.
     /// </summary>
     public static class SsaoSetup
     {
@@ -19,7 +19,7 @@ namespace CardFactory.EditorTools
             var guids = AssetDatabase.FindAssets("t:UniversalRendererData");
             if (guids.Length == 0)
             {
-                Debug.LogWarning("[CardFactory] UniversalRendererData bulunamadı. Manuel ekle: " +
+                Debug.LogWarning("[CardFactory] No UniversalRendererData found. Add manually: " +
                                  "URP Renderer asset → Add Renderer Feature → Screen Space Ambient Occlusion.");
                 return;
             }
@@ -39,11 +39,11 @@ namespace CardFactory.EditorTools
             AssetDatabase.Refresh();
 
             if (failed > 0)
-                Debug.LogWarning($"[CardFactory] SSAO: {added} eklendi, {already} zaten vardı, {failed} BAŞARISIZ. " +
-                                 "Başarısız olan(lar) için manuel: Renderer → Add Renderer Feature → SSAO.");
+                Debug.LogWarning($"[CardFactory] SSAO: {added} added, {already} already present, {failed} FAILED. " +
+                                 "For the failed one(s) add manually: Renderer → Add Renderer Feature → SSAO.");
             else
-                Debug.Log($"[CardFactory] SSAO: {added} renderer'a eklendi, {already} zaten vardı. " +
-                          "Kamera post-processing zaten açık (ApplyPolish). Play'e basıp derinliği kontrol et.");
+                Debug.Log($"[CardFactory] SSAO: added to {added} renderer(s), {already} already present. " +
+                          "Camera post-processing is already on (ApplyPolish). Press Play and check the depth.");
         }
 
         static bool HasSsao(UniversalRendererData data)
@@ -64,14 +64,14 @@ namespace CardFactory.EditorTools
             var ssao = ScriptableObject.CreateInstance<ScreenSpaceAmbientOcclusion>();
             ssao.name = "SSAO";
 
-            // Ayarları SerializedObject ile (alan adları sürüme göre değişebilir → null-güvenli).
+            // Settings via SerializedObject (field names vary by version → null-safe).
             var ssaoSo = new SerializedObject(ssao);
             SetFloat(ssaoSo, "m_Settings.Intensity", 0.7f);
             SetFloat(ssaoSo, "m_Settings.Radius", 0.32f);
             SetFloat(ssaoSo, "m_Settings.DirectLightingStrength", 0.25f);
             ssaoSo.ApplyModifiedProperties();
 
-            // Sub-asset olarak ekle; local file id alabilmek için kaydet.
+            // Add as a sub-asset; save so it gets a local file id.
             AssetDatabase.AddObjectToAsset(ssao, data);
             AssetDatabase.SaveAssets();
             if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(ssao, out _, out long localId))

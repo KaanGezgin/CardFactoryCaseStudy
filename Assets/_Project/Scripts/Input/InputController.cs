@@ -5,15 +5,15 @@ using UnityEngine;
 namespace CardFactory.InputSys
 {
     /// <summary>
-    /// Legacy Input ile tık/dokunuşu ray'e çevirir ve CardStack'e iletir.
-    /// (Input System paketi KULLANILMAZ.)
+    /// Turns taps/clicks into a ray via legacy Input and forwards them to CardStack.
+    /// (The Input System package is NOT used.)
     /// </summary>
     public class InputController : MonoBehaviour
     {
         Camera cam;
         GameManager gm;
 
-        /// <summary>Bir desteye dokunulduğunda tetiklenir (ghost pointer bunu dinler).</summary>
+        /// <summary>Fired when a stack is tapped (the ghost pointer listens to this).</summary>
         public event System.Action OnTap;
 
         public void Init(Camera camera, GameManager gameManager)

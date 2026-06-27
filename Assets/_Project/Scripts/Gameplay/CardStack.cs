@@ -8,31 +8,31 @@ using UnityEngine;
 namespace CardFactory.Gameplay
 {
     /// <summary>
-    /// Karışık renkli kart destesi (alttan-üste). Veride tüm kartlar tutulur ama
-    /// görselde yalnızca en üstteki MaxVisible kadar kart yelpaze gibi gösterilir.
-    /// Tıkta üstteki aynı-renk grubu yola gönderilir.
+    /// A mixed-color card stack (bottom-to-top). All cards are kept in data, but only the
+    /// top MaxVisible cards are shown as a fanned-out visual. Tapping sends the top
+    /// same-color group onto the belt.
     /// </summary>
     public class CardStack : MonoBehaviour
     {
-        readonly List<CardColor> cards = new();          // index 0 = en alt (tüm veri)
-        readonly List<GameObject> visuals = new();       // sadece üst pencere
+        readonly List<CardColor> cards = new();          // index 0 = bottom (all data)
+        readonly List<GameObject> visuals = new();       // top window only
         readonly Dictionary<CardColor, Material> mats = new();
 
         Conveyor conveyor;
         BoxCollider tapCollider;
 
-        Vector3 homeLocalPos;         // deste başlangıç yeri (anchor'a göre)
-        float advanceZ;              // banta doğru biriken ilerleme
+        Vector3 homeLocalPos;         // stack home position (relative to the anchor)
+        float advanceZ;              // accumulated advance toward the belt
         Coroutine slideCo;
-        const float AdvanceStep = 0.085f;   // gönderilen kart başına ileri adım
+        const float AdvanceStep = 0.085f;   // forward step per sent card
 
-        const int MaxVisible = 12;    // elde 16'ya kadar olsa da en fazla 12 kart görünür
+        const int MaxVisible = 12;    // even with up to 16 in hand, at most 12 cards are shown
         const float CardW = 0.85f;
-        const float CardThick = 0.07f;   // ince kart (referanstaki gibi)
+        const float CardThick = 0.07f;   // thin card (like the reference)
         const float CardLen = 0.95f;
-        const float TiltX = -18f;     // neredeyse yere yatık (kuş bakışı)
-        const float StepY = 0.1f;     // kartlar arası açık → adet sayılır
-        const float StepZ = 0.11f;    // yelpaze geriye açık → arkadaki renk görünür
+        const float TiltX = -18f;     // nearly flat (top-down view)
+        const float StepY = 0.1f;     // gap between cards → count is readable
+        const float StepZ = 0.11f;    // fan opens backward → the color behind is visible
         const float BaseY = 0.14f;
 
         public bool IsEmpty => cards.Count == 0;
@@ -86,7 +86,7 @@ namespace CardFactory.Gameplay
             UpdateCollider(show);
         }
 
-        // Bir grup gönderilince tüm deste banta doğru bir adım ilerler (kuyruk öne adımlar).
+        // When a group is sent, the whole stack steps toward the belt (the queue moves forward).
         void AdvanceForward(int group)
         {
             advanceZ += group * AdvanceStep;
@@ -100,7 +100,7 @@ namespace CardFactory.Gameplay
             while ((transform.localPosition - target).sqrMagnitude > 1e-5f)
             {
                 transform.localPosition = Vector3.MoveTowards(transform.localPosition, target, 6f * Time.deltaTime);
-                target = homeLocalPos + new Vector3(0f, 0f, advanceZ);   // arka arkaya gönderimde hedef güncellensin
+                target = homeLocalPos + new Vector3(0f, 0f, advanceZ);   // keep target updated for back-to-back sends
                 yield return null;
             }
             transform.localPosition = target;
@@ -124,7 +124,7 @@ namespace CardFactory.Gameplay
         public void OnTapped()
         {
             if (IsEmpty) return;
-            // Oyun bittiyse (fail/win) artık kart gönderme — fail anında oyun anında dursun.
+            // Once the game is over (fail/win) don't send cards — gameplay must stop instantly on fail.
             if (GameManager.Instance != null && GameManager.Instance.State != GameState.Playing) return;
 
             CardColor top = cards[cards.Count - 1];
@@ -135,14 +135,14 @@ namespace CardFactory.Gameplay
             var group = new List<CardColor>(groupSize);
             for (int i = 0; i < groupSize; i++) group.Add(top);
 
-            // Kartlar bu konumdan (tepe kart) banda süzülür.
+            // Cards glide onto the belt from this position (the top card).
             Vector3 origin = visuals.Count > 0
                 ? visuals[visuals.Count - 1].transform.position
                 : transform.position;
 
             if (!conveyor.TrySend(group, origin))
             {
-                // Bant dolu → gönderilemez: güçlü geri bildirim + ekran kızarması.
+                // Belt full → can't send: strong feedback + red screen flash.
                 Sfx.Play("warn");
                 Juice.CameraPunch(0.32f);
                 Sfx.Haptic();
@@ -157,9 +157,9 @@ namespace CardFactory.Gameplay
 
             cards.RemoveRange(cards.Count - groupSize, groupSize);
             RefreshVisuals();
-            AdvanceForward(groupSize);   // kalan deste banta doğru ilerlesin
+            AdvanceForward(groupSize);   // remaining stack advances toward the belt
 
-            // Açığa çıkan yeni üst kart tatmin edici şekilde "pop" yapar.
+            // The newly revealed top card does a satisfying "pop".
             if (visuals.Count > 0)
             {
                 var topT = visuals[visuals.Count - 1].transform;

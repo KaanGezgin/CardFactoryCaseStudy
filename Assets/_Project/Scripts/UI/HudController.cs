@@ -9,10 +9,9 @@ using UnityEngine.UI;
 namespace CardFactory.UI
 {
     /// <summary>
-    /// Kazan/kaybet paneli (LEVEL COMPLETE / FAILED). Artık KALICI dünyanın
-    /// parçası: bir kez kurulur, sahnede kalır. Durumu GameManager.Instance'tan
-    /// okur (per-level bağ yok), butonlar Instance üzerinden çalışır. Baked
-    /// sahneden tekrar kullanılınca Rebind ile referanslar/dinleyiciler yenilenir.
+    /// Win/lose panel (LEVEL COMPLETE / FAILED). Now part of the PERSISTENT world: built once,
+    /// stays in the scene. Reads state from GameManager.Instance (no per-level binding); buttons
+    /// act through Instance. When reused from a baked scene, Rebind refreshes references/listeners.
     /// </summary>
     public class HudController : MonoBehaviour
     {
@@ -21,14 +20,14 @@ namespace CardFactory.UI
         Sprite roundedSprite;
 
         GameObject panel;
-        Image endTint;          // tam ekran karartma/renk tint (reklamda kırmızı/yeşil)
+        Image endTint;          // full-screen dim/color tint (red/green in the ad)
         Image bannerBack;
         Image bannerFront;
         Text bannerText;
-        Text adSub;             // reklam alt yazısı ("Can you do it?" / "So satisfying!")
+        Text adSub;             // ad subtitle ("Can you do it?" / "So satisfying!")
         Coroutine adPopCo;
-        bool adGlowOn;          // reklam fail'inde DockGlow (FailOfferGlow) göster
-        Image flashImg;         // tam ekran flaş (bant dolu/engellendi → kızarma)
+        bool adGlowOn;          // show DockGlow (FailOfferGlow) on the ad fail beat
+        Image flashImg;         // full-screen flash (belt full/blocked → red)
         Coroutine flashCo;
         GameObject nextButton;
         GameObject closeButton;
@@ -38,7 +37,7 @@ namespace CardFactory.UI
         Image failGlowImg;
         float failGlowPulse;
 
-        // --- Kurulum (bake / taze) ---
+        // --- Setup (bake / fresh) ---
 
         public void Init()
         {
@@ -50,7 +49,7 @@ namespace CardFactory.UI
             dock = Object.FindFirstObjectByType<Dock>();
         }
 
-        // --- Baked sahneden tekrar kullanım: referansları ve dinleyicileri yenile ---
+        // --- Reuse from a baked scene: refresh references and listeners ---
 
         public void Rebind()
         {
@@ -90,8 +89,8 @@ namespace CardFactory.UI
                     failGlowGo = glowT.gameObject;
                     failGlowRt = glowT.GetComponent<RectTransform>();
                     failGlowImg = glowT.GetComponent<Image>();
-                    // Baked eski sprite'ı yeni donut glow ile değiştir; KONUM/BOYUT'a dokunma
-                    // (Inspector'dan ayarladığın değerler korunur).
+                    // Replace the old baked sprite with the new donut glow; don't touch POSITION/SIZE
+                    // (the values you set in the Inspector are preserved).
                     if (failGlowImg != null)
                     {
                         failGlowImg.sprite = MakeSoftGlowSprite();
@@ -170,12 +169,12 @@ namespace CardFactory.UI
             panel.SetActive(false);
         }
 
-        // Yumuşak ışık havuzu rengi (image 3 gibi: nötr-serin beyaz, bloom'la parlar).
+        // Soft light-pool color (like image 3: neutral-cool white, glows with bloom).
         static readonly Color GlowColor = new Color(0.92f, 0.96f, 1f);
 
         /// <summary>
-        /// Fail ekranı karartmasının ÜSTÜNDE çizilen, dock teklifini "aydınlatan"
-        /// yumuşak radyal ışık havuzu (dolu glow; image 3 gibi). EndPanel ile kardeş.
+        /// A soft radial light pool drawn ABOVE the fail-screen dim that "lights up" the dock
+        /// offer (filled glow; like image 3). A sibling of EndPanel.
         /// </summary>
         void BuildFailOfferGlow(Transform canvasRoot)
         {
@@ -184,7 +183,7 @@ namespace CardFactory.UI
             failGlowRt = failGlowGo.AddComponent<RectTransform>();
             failGlowRt.anchorMin = failGlowRt.anchorMax = new Vector2(0.5f, 0.5f);
             failGlowRt.pivot = new Vector2(0.5f, 0.5f);
-            // Varsayılan konum/boyut (Inspector'dan ayarlanıp bake edilince bunlar korunur).
+            // Default position/size (preserved once tuned in the Inspector and baked).
             failGlowRt.sizeDelta = new Vector2(309f, 337f);
             failGlowRt.anchoredPosition3D = new Vector3(340f, -321.5837f, 16.68921f);
 
@@ -196,8 +195,8 @@ namespace CardFactory.UI
         }
 
         /// <summary>
-        /// Yumuşak halka (donut) glow — MERKEZ BOŞ (arkadaki teklif görünür), kenarda yumuşak
-        /// parlama. mid = tepe yarıçapı, w = halkanın yumuşaklık genişliği.
+        /// Soft ring (donut) glow — CENTER EMPTY (the offer behind shows through), soft glow at
+        /// the edge. mid = peak radius, w = softness width of the ring.
         /// </summary>
         static Sprite MakeSoftGlowSprite(int size = 256, float mid = 0.66f, float w = 0.40f)
         {
@@ -208,9 +207,9 @@ namespace CardFactory.UI
             for (int y = 0; y < size; y++)
                 for (int x = 0; x < size; x++)
                 {
-                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c; // 0=merkez
-                    float a = Mathf.Clamp01(1f - Mathf.Abs(d - mid) / w);            // halka
-                    a = a * a * (3f - 2f * a);   // smoothstep → yumuşak kenar
+                    float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c; // 0=center
+                    float a = Mathf.Clamp01(1f - Mathf.Abs(d - mid) / w);            // ring
+                    a = a * a * (3f - 2f * a);   // smoothstep → soft edge
                     px[y * size + x] = new Color(1f, 1f, 1f, a);
                 }
             tex.SetPixels32(px);
@@ -227,7 +226,7 @@ namespace CardFactory.UI
                 return;
             }
 
-            // Konum/boyut/scale Inspector'dan gelir; KOD EZMEZ. Sadece hafif alpha nefesi.
+            // Position/size/scale come from the Inspector; CODE DOES NOT override them. Only a soft alpha breath.
             failGlowPulse += Time.deltaTime;
             float breath = Mathf.Sin(failGlowPulse * 1.6f) * 0.5f + 0.5f;
             float alpha = Mathf.Lerp(0.32f, 0.5f, breath);
@@ -237,8 +236,8 @@ namespace CardFactory.UI
         }
 
         /// <summary>
-        /// REKLAM (AdDirector) için: mevcut yuvarlatılmış banner panelini kullanır. NEXT/X butonları
-        /// gizli; alt yazı + tam ekran renk tint (kırmızı fail / yeşil success). Timing AdDirector'da.
+        /// For the AD (AdDirector): reuses the existing rounded banner panel. NEXT/X buttons hidden;
+        /// subtitle + full-screen color tint (red fail / green success). Timing lives in AdDirector.
         /// </summary>
         public void ShowAdMessage(string banner, string sub, Color front, Color tint,
                                   bool showClose = false, bool failGlow = false)
@@ -270,7 +269,7 @@ namespace CardFactory.UI
             if (failGlowGo != null) failGlowGo.SetActive(false);
         }
 
-        /// <summary>Banner pop (geri-yaylı) + tint fade, sonra hafif nefes. Tamamen koddan efekt.</summary>
+        /// <summary>Banner pop (ease-out-back) + tint fade, then a soft breath. Fully code-driven effect.</summary>
         IEnumerator AdPop(Color tint)
         {
             float t = 0f, dur = 0.34f;
@@ -287,7 +286,7 @@ namespace CardFactory.UI
             if (endTint != null) endTint.color = tint;
 
             float b = 0f;
-            while (true)   // ekranda kaldıkça hafif nefes
+            while (true)   // soft breath while it stays on screen
             {
                 b += Time.deltaTime;
                 SetBannerScale(1f + Mathf.Sin(b * 2.4f) * 0.02f);
@@ -312,8 +311,8 @@ namespace CardFactory.UI
         }
 
         /// <summary>
-        /// Özel font: `Assets/Resources/UIFont.ttf` (veya .otf) varsa onu kullan; yoksa builtin.
-        /// Hypercasual için Google Fonts: Fredoka / Lilita One / Luckiest Guy / Titan One / Baloo 2.
+        /// Custom font: use `Assets/Resources/UIFont.ttf` (or .otf) if present; otherwise builtin.
+        /// Hypercasual Google Fonts: Fredoka / Lilita One / Luckiest Guy / Titan One / Baloo 2.
         /// </summary>
         static Font LoadUiFont()
         {
@@ -324,7 +323,7 @@ namespace CardFactory.UI
             return f;
         }
 
-        /// <summary>Resimdeki gibi tıknaz görünüm: koyu kontur + yumuşak gölge (kodla, asset yok).</summary>
+        /// <summary>Chunky look like the reference: dark outline + soft shadow (in code, no assets).</summary>
         static void ApplyTextFx(Text t)
         {
             if (t == null || t.GetComponent<Outline>() != null) return;
@@ -336,7 +335,7 @@ namespace CardFactory.UI
             sh.effectDistance = new Vector2(0f, -8f);
         }
 
-        /// <summary>Tam ekranı kısa süre renkle flaşlatır (bant dolu/engellendi geri bildirimi). Koddan.</summary>
+        /// <summary>Briefly flashes the full screen with a color (belt full/blocked feedback). Code-driven.</summary>
         public void FlashScreen(Color color, float duration)
         {
             EnsureFlash();
@@ -366,7 +365,7 @@ namespace CardFactory.UI
             float t = 0f;
             while (t < duration)
             {
-                float k = 1f - t / duration;        // peak → 0
+                float k = 1f - t / duration;        // fade from peak → 0
                 flashImg.color = new Color(color.r, color.g, color.b, color.a * k);
                 t += Time.deltaTime;
                 yield return null;
@@ -485,10 +484,10 @@ namespace CardFactory.UI
 
         void Update()
         {
-            // Reklam modunda paneli AdDirector açıkça yönetir (ShowAdMessage); otomatik akışı atla.
+            // In ad mode AdDirector drives the panel explicitly (ShowAdMessage); skip the automatic flow.
             if (GameBootstrap.AdMode)
             {
-                UpdateFailOfferGlow(adGlowOn);   // fail beat'inde DockGlow (donut) göster
+                UpdateFailOfferGlow(adGlowOn);   // show DockGlow (donut) on the fail beat
                 return;
             }
 
@@ -497,7 +496,7 @@ namespace CardFactory.UI
 
             bool ended = gm.State == GameState.Won || gm.State == GameState.Lost;
             if (panel != null && panel.activeSelf != ended) panel.SetActive(ended);
-            UpdateFailOfferGlow(false);   // FailOfferGlow kapalı (beğenilmedi)
+            UpdateFailOfferGlow(false);   // FailOfferGlow off (disliked)
             if (!ended || panel == null) return;
 
             bool won = gm.State == GameState.Won;

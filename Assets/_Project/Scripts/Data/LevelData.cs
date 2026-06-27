@@ -4,37 +4,37 @@ using System.Collections.Generic;
 namespace CardFactory.Data
 {
     /// <summary>
-    /// Tek bir level'in tanımı. Plain serializable class (asset yok).
-    /// Yığınlar alttan-üste renk dizisi olarak verilir; kutu kuyruğu sıralı
-    /// hedef renk listesidir.
+    /// Definition of a single level. A plain serializable class (no asset).
+    /// Stacks are given as bottom-to-top color sequences; the bin queue is the
+    /// ordered list of target colors.
     /// </summary>
     [Serializable]
     public class LevelData
     {
         /// <summary>
-        /// Her yığın = alttan-üste renk dizisi (index 0 = en alt).
+        /// Each stack = bottom-to-top color sequence (index 0 = bottom).
         /// </summary>
         public List<List<CardColor>> stacks = new();
 
         /// <summary>
-        /// Sevk kutularının hedef renk kuyruğu (eski model; artık binColorOrder
-        /// kullanılıyor ama geriye dönük bırakıldı).
+        /// Target color queue for the ship bins (legacy model; binColorOrder is used now
+        /// but this is kept for backward compatibility).
         /// </summary>
         public List<CardColor> binQueue = new();
 
         /// <summary>
-        /// Renklerin "açılma" sırası = yığınların üstten-alta erişim sırası.
-        /// BinManager kutuları bu sırayla dağıtır; aktif 2 kutu hep farklı renk olur.
+        /// The order in which colors "open up" = the top-to-bottom access order of the stacks.
+        /// BinManager hands out bins in this order; the 2 active bins are always different colors.
         /// </summary>
         public List<CardColor> binColorOrder = new();
 
-        // Level başına override edilebilen sayılar (0/negatif = GameConfig kullan).
+        // Per-level overridable numbers (0/negative = use GameConfig).
         public int activeBinCount = 2;
         public int binCapacity = 10;
         public int dockCapacity = 24;
         public int beltMaxCards = 20;
 
-        /// <summary>Bu level'deki toplam kart sayısı (kazanma kontrolü için).</summary>
+        /// <summary>Total number of cards in this level (for the win check).</summary>
         public int TotalCards
         {
             get

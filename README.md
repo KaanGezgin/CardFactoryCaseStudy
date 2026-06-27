@@ -25,6 +25,8 @@ Editor** and saved with the scene; the generated world is the starting point, no
 - **Left click / tap** a card stack → sends the top same-color group onto the conveyor.
 - **Win/Lose panel** → `NEXT` (next level) / `X` (restart). Each build/restart generates a fresh random level.
 - **`A` key** → starts the **marketability ad sequence** (auto-played; see *Marketability* below).
+  It begins after a short ~3 s delay (a recording buffer), so nothing happening immediately after the
+  key press is expected.
 
 > A custom 3D "hand" pointer replaces the system cursor during play (it follows the mouse and shows taps).
 
@@ -77,11 +79,14 @@ long-term should ideally live in code defaults).
 ## Presentation & juice
 
 - Camera: top-down 2.5D angle framed for portrait; URP post-processing (bloom, vignette, color grading, tonemapping).
-- Satisfying feedback: scale-pop / squash, particle bursts on ship, camera punch, procedural click/whoosh/ka-ching
-  SFX + haptics, dock "tension" pulse as it fills.
+- Satisfying feedback: scale-pop / squash, particle bursts on ship, camera punch, and a full set of **procedural
+  SFX synthesized in code** (no audio files) + haptics — punchy click/whoosh/plop cues, a soft *tick* as each card
+  enters the belt, a lively ka-ching on ship, and bright ringing win/fail stings — plus a dock "tension" pulse as it fills.
 - Match-Factory-style polish: soft contact shadows under objects, glossy bins with a rising segmented fill bar +
   status lamp, identified conveyor with flowing chevrons, thicker cards, an animated **background factory**
   (running belts, moving boxes, silos), and a gate with an entry slot + front exit mouth + an X/20 progress bar.
+- Upright cards **reorient to follow the belt** — they smoothly rotate toward the path tangent around the
+  U-turns (fanning around the corners) instead of staying axis-aligned.
 
 ---
 
@@ -89,7 +94,8 @@ long-term should ideally live in code defaults).
 
 `AdDirector` plays a single self-contained ad creative (benchmarked against **Match Factory! "Ad Type 3"**):
 **fail-bait → success → CTA ("Play now")**, in English, color-psychology driven (red on failure, green on success).
-Trigger with the **`A` key** (or `GameConfig.adMode`). It drives the board itself on deterministic demo levels.
+Trigger with the **`A` key** (or `GameConfig.adMode`); it starts after a short ~3 s delay (recording buffer).
+It drives the board itself on deterministic demo levels.
 
 ---
 
