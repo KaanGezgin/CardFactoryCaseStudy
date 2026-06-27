@@ -10,6 +10,9 @@ Editor** and saved with the scene; the generated world is the starting point, no
 - **Target:** mobile portrait; captured in the Editor at **1080×1920**
 - **No external assets/packages** except `com.unity.recorder` (for video capture). All meshes are runtime
   primitives / procedural rounded cubes, all materials are `URP/Lit` created in code, all SFX are procedural.
+- **Repository:** if the bundled project won't open or build for any reason, clone a fresh copy from
+  **[github.com/KaanGezgin/CardFactoryCaseStudy](https://github.com/KaanGezgin/CardFactoryCaseStudy)**
+  (`git clone https://github.com/KaanGezgin/CardFactoryCaseStudy.git`).
 
 ---
 
@@ -96,7 +99,7 @@ long-term should ideally live in code defaults).
 
 ---
 
-## Marketability (Part 3) — ad mode
+## Marketability — ad mode
 
 `AdDirector` plays a single self-contained ad creative (benchmarked against **Match Factory! "Ad Type 3"**):
 **fail-bait → success → CTA ("Play now")**, in English, color-psychology driven (red on failure, green on success).
