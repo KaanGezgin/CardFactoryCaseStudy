@@ -41,7 +41,7 @@ namespace CardFactory.Feedback
                 { "ship",     Arp(new[] { 330f, 440f, 660f },       0.10f, 0.82f) },                   // ship: warm ka-ching
                 { "complete", ArpRing(new[] { 392f, 523f, 659f, 784f, 1046f }, 0.10f, 0.45f, 0.55f) }, // fanfare: lively, ringing, bright (less thick)
                 { "warn",     Sweep(260f, 200f,  0.20f, 0.78f, hit:true) },                            // warning: low fall
-                { "fail",     ArpRing(new[] { 587f, 440f, 349f, 262f }, 0.18f, 0.85f, 0.65f) },        // fail: lively ringing descent (light, less thick) — long ring
+                { "fail",     MakeFailSting() },                                                       // fail: gentle "you failed" — descending C-minor + drooping low note
                 { "tick",     Tone(780f,  0.028f, 0.55f, hit:true) },                                  // card entered the belt: soft tick
             };
         }
@@ -164,6 +164,56 @@ namespace CardFactory.Feedback
                 }
             }
             for (int i = 0; i < n; i++) data[i] = data[i] / (1f + Mathf.Abs(data[i]));   // soft-clip (overlap must not clip)
+            return MakeClip(data);
+        }
+
+        /// <summary>Warm, mellow voice: sine-heavy + a little octave body, no bright sparkle → gentle.</summary>
+        static float WarmVoice(float phase)
+        {
+            return Mathf.Sin(phase) * 0.82f
+                 + Mathf.Sin(2f * phase) * 0.16f
+                 + Mathf.Sin(3f * phase) * 0.02f;
+        }
+
+        /// <summary>
+        /// "You failed" sting — gentle but clear (researched fail-sound design). A descending
+        /// C-minor arpeggio (G4→Eb4→C4: sad yet consonant, not harsh) resolving into a low note
+        /// that DROOPS downward (the resigned "sad-trombone" sink). Warm voice (no bright/shrill
+        /// highs), soft ~20 ms attack, long soft decay, moderate level → reads as defeat without
+        /// being annoying. Notes overlap (legato) and are soft-clipped so the blend never clips.
+        /// </summary>
+        static AudioClip MakeFailSting()
+        {
+            // (startHz, endHz, startSec, ringSec, vol) — end<start on the last note = downward droop.
+            var notes = new (float f0, float f1, float start, float ring, float vol)[]
+            {
+                (392f, 392f, 0.00f, 0.34f, 0.52f),   // G4
+                (311f, 311f, 0.15f, 0.40f, 0.55f),   // Eb4
+                (262f, 262f, 0.30f, 0.48f, 0.58f),   // C4
+                (196f, 168f, 0.48f, 0.85f, 0.60f),   // G3 droops down to ~E3 (resigned sigh)
+            };
+
+            int total = 0;
+            foreach (var nn in notes)
+                total = Mathf.Max(total, (int)(Rate * (nn.start + nn.ring)));
+            var data = new float[Mathf.Max(1, total)];
+
+            foreach (var nn in notes)
+            {
+                int off  = (int)(Rate * nn.start);
+                int tail = Mathf.Max(1, (int)(Rate * nn.ring));
+                float phase = 0f;
+                for (int j = 0; j < tail && off + j < data.Length; j++)
+                {
+                    float u   = (float)j / tail;
+                    float a   = j < 880 ? (float)j / 880f : 1f;   // ~20 ms soft attack (no click)
+                    float env = a * Mathf.Exp(-3.0f * u);         // long, soft decay
+                    float f   = Mathf.Lerp(nn.f0, nn.f1, u);      // pitch droop on the final note
+                    phase += 2f * Mathf.PI * f / Rate;
+                    data[off + j] += WarmVoice(phase) * nn.vol * env;
+                }
+            }
+            for (int i = 0; i < data.Length; i++) data[i] = data[i] / (1f + Mathf.Abs(data[i]));  // soft-clip
             return MakeClip(data);
         }
 
